@@ -1,8 +1,8 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Clinic\DashboardController;
 use App\Http\Controllers\Clinic\PatientController;
+use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -42,7 +42,9 @@ Route::middleware(['auth', 'verified', 'active.tenant'])
         Route::prefix('clinic')
             ->name('clinic.')
             ->group(function () {
+
                 Route::resource('patients', PatientController::class);
+
             });
     });
 
@@ -62,6 +64,7 @@ Route::middleware('auth')->group(function () {
 
     Route::delete('/profile', [ProfileController::class, 'destroy'])
         ->name('profile.destroy');
+
 });
 
 /*
