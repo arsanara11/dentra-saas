@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
@@ -562,7 +563,7 @@
             ====================================================== --}}
 
             <header
-                class="flex h-[88px] shrink-0 items-center justify-between border-b border-[#EEF1F5] bg-white px-5 sm:px-7 lg:px-10"
+                class="flex h-[76px] shrink-0 items-center justify-between border-b border-[#EEF1F5] bg-white px-4 sm:px-5 lg:px-7"
             >
 
 
@@ -693,7 +694,7 @@
             ====================================================== --}}
 
             <div
-                class="dentra-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-8 pt-6 sm:px-7 lg:px-10"
+                class="dentra-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-4 sm:px-5 sm:pb-8 sm:pt-5 lg:px-6"
             >
 
                 {{ $slot }}
