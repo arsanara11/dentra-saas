@@ -32,6 +32,8 @@
                     </div>
 
                     <div class="flex flex-wrap items-center gap-3">
+
+                        {{-- BACK TO PATIENTS --}}
                         <a href="{{ route('clinic.patients.index') }}"
                            class="inline-flex items-center gap-2 rounded-xl border border-[#DCE5ED] bg-white px-4 py-2.5 text-sm font-semibold text-[#59657A] transition hover:bg-[#F7FAFC]">
                             <svg xmlns="http://www.w3.org/2000/svg"
@@ -47,6 +49,7 @@
                             Back to Patients
                         </a>
 
+                        {{-- EDIT PATIENT --}}
                         @canDent('patients.update')
                             <a href="{{ route('clinic.patients.edit', $patient) }}"
                                class="inline-flex items-center gap-2 rounded-xl bg-[#5B9DF9] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4D90F0]">
@@ -63,8 +66,33 @@
                                 Edit Patient
                             </a>
                         @endcanDent
-                    </div>
 
+                        {{-- DELETE PATIENT --}}
+                        @canDent('patients.delete')
+                            <form action="{{ route('clinic.patients.destroy', $patient) }}"
+                                  method="POST"
+                                  onsubmit="return confirm('Are you sure you want to delete this patient? This action cannot be undone.');">
+                                @csrf
+                                @method('DELETE')
+
+                                <button type="submit"
+                                        class="inline-flex items-center gap-2 rounded-xl border border-[#F2CFCF] bg-white px-4 py-2.5 text-sm font-semibold text-[#D9534F] shadow-sm transition hover:border-[#E9B6B6] hover:bg-[#FFF5F5]">
+                                    <svg xmlns="http://www.w3.org/2000/svg"
+                                         class="h-4 w-4"
+                                         fill="none"
+                                         viewBox="0 0 24 24"
+                                         stroke="currentColor"
+                                         stroke-width="1.8">
+                                        <path stroke-linecap="round"
+                                              stroke-linejoin="round"
+                                              d="M6 7h12M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5" />
+                                    </svg>
+                                    Delete Patient
+                                </button>
+                            </form>
+                        @endcanDent
+
+                    </div>
                 </div>
             </div>
         </div>
@@ -339,3 +367,4 @@
         </main>
     </div>
 </x-app-layout>
+
