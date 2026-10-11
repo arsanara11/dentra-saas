@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Clinic\AppointmentController;
 use App\Http\Controllers\Clinic\DashboardController;
 use App\Http\Controllers\Clinic\PatientController;
 use App\Http\Controllers\ProfileController;
@@ -35,7 +36,7 @@ Route::middleware(['auth', 'verified', 'active.tenant'])
 
         /*
         |--------------------------------------------------------------------------
-        | Patients
+        | Clinic Modules
         |--------------------------------------------------------------------------
         */
 
@@ -43,7 +44,11 @@ Route::middleware(['auth', 'verified', 'active.tenant'])
             ->name('clinic.')
             ->group(function () {
 
+                // Patients
                 Route::resource('patients', PatientController::class);
+
+                // Appointments
+                Route::resource('appointments', AppointmentController::class);
 
             });
     });
@@ -74,3 +79,4 @@ Route::middleware('auth')->group(function () {
 */
 
 require __DIR__ . '/auth.php';
+
