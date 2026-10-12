@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Clinic\AppointmentController;
 use App\Http\Controllers\Clinic\DashboardController;
+use App\Http\Controllers\Clinic\DoctorController;
 use App\Http\Controllers\Clinic\PatientController;
 use App\Http\Controllers\Clinic\QueueController;
 use App\Http\Controllers\ProfileController;
@@ -51,6 +52,9 @@ Route::middleware(['auth', 'verified', 'active.tenant'])
                 // Appointments
                 Route::resource('appointments', AppointmentController::class);
 
+                // Doctors
+                Route::resource('doctors', DoctorController::class);
+
                 // Queue Management
                 Route::get('/queues', [QueueController::class, 'index'])
                     ->name('queues.index');
@@ -58,8 +62,10 @@ Route::middleware(['auth', 'verified', 'active.tenant'])
                 Route::post('/queues', [QueueController::class, 'store'])
                     ->name('queues.store');
 
-                Route::patch('/queues/{queue}/status', [QueueController::class, 'updateStatus'])
-                    ->name('queues.status');
+                Route::patch(
+                    '/queues/{queue}/status',
+                    [QueueController::class, 'updateStatus']
+                )->name('queues.status');
             });
     });
 
