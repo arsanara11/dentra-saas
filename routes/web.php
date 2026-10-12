@@ -3,6 +3,7 @@
 use App\Http\Controllers\Clinic\AppointmentController;
 use App\Http\Controllers\Clinic\DashboardController;
 use App\Http\Controllers\Clinic\PatientController;
+use App\Http\Controllers\Clinic\QueueController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -50,6 +51,15 @@ Route::middleware(['auth', 'verified', 'active.tenant'])
                 // Appointments
                 Route::resource('appointments', AppointmentController::class);
 
+                // Queue Management
+                Route::get('/queues', [QueueController::class, 'index'])
+                    ->name('queues.index');
+
+                Route::post('/queues', [QueueController::class, 'store'])
+                    ->name('queues.store');
+
+                Route::patch('/queues/{queue}/status', [QueueController::class, 'updateStatus'])
+                    ->name('queues.status');
             });
     });
 
@@ -69,7 +79,6 @@ Route::middleware('auth')->group(function () {
 
     Route::delete('/profile', [ProfileController::class, 'destroy'])
         ->name('profile.destroy');
-
 });
 
 /*
@@ -79,4 +88,3 @@ Route::middleware('auth')->group(function () {
 */
 
 require __DIR__ . '/auth.php';
-

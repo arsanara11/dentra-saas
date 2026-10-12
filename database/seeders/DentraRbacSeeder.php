@@ -80,15 +80,21 @@ class DentraRbacSeeder extends Seeder
             // Queue
             [
                 'name' => 'View Queue',
-                'slug' => 'queue.view',
-                'group' => 'queue',
-                'description' => 'View clinic queue.',
+                'slug' => 'queues.view',
+                'group' => 'queues',
+                'description' => 'View clinic queues.',
             ],
             [
-                'name' => 'Manage Queue',
-                'slug' => 'queue.manage',
-                'group' => 'queue',
-                'description' => 'Call, skip, recall, and manage queue tickets.',
+                'name' => 'Create Queue',
+                'slug' => 'queues.create',
+                'group' => 'queues',
+                'description' => 'Register patients in the clinic queue.',
+            ],
+            [
+                'name' => 'Update Queue',
+                'slug' => 'queues.update',
+                'group' => 'queues',
+                'description' => 'Update queue status and patient flow.',
             ],
 
             // Doctors
@@ -387,8 +393,9 @@ class DentraRbacSeeder extends Seeder
                 'appointments.update',
                 'appointments.cancel',
 
-                'queue.view',
-                'queue.manage',
+                'queues.view',
+                'queues.create',
+                'queues.update',
 
                 'doctors.view',
                 'doctors.manage',
@@ -439,8 +446,9 @@ class DentraRbacSeeder extends Seeder
                 'appointments.update',
                 'appointments.cancel',
 
-                'queue.view',
-                'queue.manage',
+                'queues.view',
+                'queues.create',
+                'queues.update',
 
                 'doctors.view',
 
@@ -484,8 +492,9 @@ class DentraRbacSeeder extends Seeder
                 'appointments.update',
                 'appointments.cancel',
 
-                'queue.view',
-                'queue.manage',
+                'queues.view',
+                'queues.create',
+                'queues.update',
 
                 'doctors.view',
 
@@ -501,7 +510,8 @@ class DentraRbacSeeder extends Seeder
                 'appointments.view',
                 'appointments.update',
 
-                'queue.view',
+                'queues.view',
+                'queues.update',
 
                 'doctors.view',
 
@@ -523,7 +533,7 @@ class DentraRbacSeeder extends Seeder
 
                 'appointments.view',
 
-                'queue.view',
+                'queues.view',
 
                 'doctors.view',
 
