@@ -17,6 +17,9 @@ class DentalRecordController extends Controller
         protected TenantContext $tenantContext
     ) {}
 
+    /**
+     * Display all dental records for the active tenant.
+     */
     public function index(Request $request)
     {
         $tenant = $this->tenantContext->require();
@@ -34,8 +37,15 @@ class DentalRecordController extends Controller
 
             $query->where(function ($q) use ($search) {
                 $q->whereHas('patient', function ($patientQuery) use ($search) {
-                    $patientQuery->where('name', 'like', "%{$search}%")
-                        ->orWhere('patient_code', 'like', "%{$search}%");
+                    $patientQuery->where(function ($nameQuery) use ($search) {
+                        $nameQuery->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhereRaw(
+                                "CONCAT(first_name, ' ', last_name) LIKE ?",
+                                ["%{$search}%"]
+                            )
+                            ->orWhere('patient_number', 'like', "%{$search}%");
+                    });
                 })
                 ->orWhereHas('doctor', function ($doctorQuery) use ($search) {
                     $doctorQuery->where('name', 'like', "%{$search}%");
@@ -59,6 +69,9 @@ class DentalRecordController extends Controller
         return view('clinic.dental-records.index', compact('records'));
     }
 
+    /**
+     * Show the form for creating a dental record.
+     */
     public function create()
     {
         $tenant = $this->tenantContext->require();
@@ -69,7 +82,8 @@ class DentalRecordController extends Controller
         );
 
         $patients = Patient::where('tenant_id', $tenant->id)
-            ->orderBy('name')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
             ->get();
 
         $doctors = Doctor::where('tenant_id', $tenant->id)
@@ -88,6 +102,9 @@ class DentalRecordController extends Controller
         ));
     }
 
+    /**
+     * Store a new dental record.
+     */
     public function store(Request $request)
     {
         $tenant = $this->tenantContext->require();
@@ -110,6 +127,9 @@ class DentalRecordController extends Controller
             ->with('success', 'Dental record berhasil ditambahkan.');
     }
 
+    /**
+     * Display a specific dental record.
+     */
     public function show(DentalRecord $dentalRecord)
     {
         $tenant = $this->tenantContext->require();
@@ -124,19 +144,19 @@ class DentalRecordController extends Controller
             404
         );
 
-        $dentalRecord->load([
+        $record = $dentalRecord->load([
             'patient',
             'doctor',
             'appointment',
             'creator',
         ]);
 
-        return view(
-            'clinic.dental-records.show',
-            compact('dentalRecord')
-        );
+        return view('clinic.dental-records.show', compact('record'));
     }
 
+    /**
+     * Show the form for editing a dental record.
+     */
     public function edit(DentalRecord $dentalRecord)
     {
         $tenant = $this->tenantContext->require();
@@ -152,7 +172,8 @@ class DentalRecordController extends Controller
         );
 
         $patients = Patient::where('tenant_id', $tenant->id)
-            ->orderBy('name')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
             ->get();
 
         $doctors = Doctor::where('tenant_id', $tenant->id)
@@ -172,6 +193,9 @@ class DentalRecordController extends Controller
         ));
     }
 
+    /**
+     * Update an existing dental record.
+     */
     public function update(
         Request $request,
         DentalRecord $dentalRecord
@@ -197,6 +221,9 @@ class DentalRecordController extends Controller
             ->with('success', 'Dental record berhasil diperbarui.');
     }
 
+    /**
+     * Deletion of dental records is prohibited.
+     */
     public function destroy(DentalRecord $dentalRecord)
     {
         $tenant = $this->tenantContext->require();
@@ -206,10 +233,12 @@ class DentalRecordController extends Controller
             404
         );
 
-        // Penghapusan dinonaktifkan demi keamanan rekam medis.
         abort(403, 'Penghapusan rekam medis tidak diizinkan.');
     }
 
+    /**
+     * Validate dental record input.
+     */
     private function validateRecord(
         Request $request,
         int $tenantId
