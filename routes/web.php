@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Clinic\AppointmentController;
 use App\Http\Controllers\Clinic\DashboardController;
+use App\Http\Controllers\Clinic\DentalRecordController;
 use App\Http\Controllers\Clinic\DoctorController;
 use App\Http\Controllers\Clinic\PatientController;
 use App\Http\Controllers\Clinic\QueueController;
@@ -54,6 +55,9 @@ Route::middleware(['auth', 'verified', 'active.tenant'])
 
                 // Doctors
                 Route::resource('doctors', DoctorController::class);
+
+                // Dental Records
+                Route::resource('dental-records', DentalRecordController::class);
 
                 // Queue Management
                 Route::get('/queues', [QueueController::class, 'index'])
