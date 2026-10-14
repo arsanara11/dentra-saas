@@ -40,13 +40,16 @@ class QueueController extends Controller
             ->whereDate('queue_date', $date)
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
-                    $query->where('queue_number', 'like', "%{$search}%")
-                        ->orWhereHas('patient', function ($patientQuery) use ($search) {
-                            $patientQuery
-                                ->where('first_name', 'like', "%{$search}%")
-                                ->orWhere('last_name', 'like', "%{$search}%")
-                                ->orWhere('patient_number', 'like', "%{$search}%");
-                        });
+                    $query->where(
+                        'queue_number',
+                        'like',
+                        "%{$search}%"
+                    )->orWhereHas('patient', function ($patientQuery) use ($search) {
+                        $patientQuery
+                            ->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('patient_number', 'like', "%{$search}%");
+                    });
                 });
             })
             ->when(
@@ -59,6 +62,7 @@ class QueueController extends Controller
                 ], true),
                 fn ($query) => $query->where('status', $status)
             )
+            ->orderBy('branch_id')
             ->orderBy('queue_number')
             ->paginate(15)
             ->withQueryString();
@@ -116,7 +120,7 @@ class QueueController extends Controller
                     ->where('status', 'active'),
             ],
             'branch_id' => [
-                'nullable',
+                'required',
                 Rule::exists('branches', 'id')
                     ->where('tenant_id', $tenant->id),
             ],
@@ -125,7 +129,10 @@ class QueueController extends Controller
                 Rule::exists('appointments', 'id')
                     ->where('tenant_id', $tenant->id),
             ],
-            'queue_date' => ['required', 'date_format:Y-m-d'],
+            'queue_date' => [
+                'required',
+                'date_format:Y-m-d',
+            ],
         ]);
 
         if (!empty($validated['appointment_id'])) {
@@ -134,16 +141,29 @@ class QueueController extends Controller
                 ->findOrFail($validated['appointment_id']);
 
             abort_unless(
-                (int) $appointment->patient_id === (int) $validated['patient_id'],
+                (int) $appointment->patient_id ===
+                    (int) $validated['patient_id'],
                 422,
                 'The selected appointment does not belong to this patient.'
             );
 
-            if (in_array($appointment->status, ['cancelled', 'no_show'], true)) {
+            abort_unless(
+                (int) $appointment->branch_id ===
+                    (int) $validated['branch_id'],
+                422,
+                'The selected appointment belongs to a different branch.'
+            );
+
+            if (in_array(
+                $appointment->status,
+                ['cancelled', 'no_show'],
+                true
+            )) {
                 return back()
                     ->withInput()
                     ->withErrors([
-                        'appointment_id' => 'A cancelled or missed appointment cannot be queued.',
+                        'appointment_id' =>
+                            'A cancelled or missed appointment cannot be queued.',
                     ]);
             }
 
@@ -156,29 +176,76 @@ class QueueController extends Controller
                 return back()
                     ->withInput()
                     ->withErrors([
-                        'appointment_id' => 'This appointment already has a queue entry.',
+                        'appointment_id' =>
+                            'This appointment already has a queue entry.',
                     ]);
             }
         }
 
         try {
-            DB::transaction(function () use ($validated, $tenant, $request) {
-                $tenant->newQuery()
-                    ->whereKey($tenant->id)
+            DB::transaction(function () use (
+                $validated,
+                $tenant,
+                $request
+            ) {
+                // Lock the branch while allocating its queue number.
+                Branch::query()
+                    ->where('tenant_id', $tenant->id)
+                    ->whereKey($validated['branch_id'])
                     ->lockForUpdate()
                     ->firstOrFail();
 
+                if (!empty($validated['appointment_id'])) {
+                    // Serialize check-ins for the same appointment.
+                    $appointment = Appointment::query()
+                        ->where('tenant_id', $tenant->id)
+                        ->whereKey($validated['appointment_id'])
+                        ->lockForUpdate()
+                        ->firstOrFail();
+
+                    if (in_array(
+                        $appointment->status,
+                        ['cancelled', 'no_show'],
+                        true
+                    )) {
+                        abort(
+                            422,
+                            'A cancelled or missed appointment cannot be queued.'
+                        );
+                    }
+
+                    $alreadyQueued = Queue::query()
+                        ->where('tenant_id', $tenant->id)
+                        ->where(
+                            'appointment_id',
+                            $appointment->id
+                        )
+                        ->exists();
+
+                    if ($alreadyQueued) {
+                        abort(
+                            422,
+                            'This appointment already has a queue entry.'
+                        );
+                    }
+                }
+
+                // Numbering starts independently for each branch and date.
                 $lastNumber = Queue::query()
                     ->where('tenant_id', $tenant->id)
-                    ->whereDate('queue_date', $validated['queue_date'])
-                    ->lockForUpdate()
+                    ->where('branch_id', $validated['branch_id'])
+                    ->whereDate(
+                        'queue_date',
+                        $validated['queue_date']
+                    )
                     ->max('queue_number');
 
                 Queue::create([
                     'tenant_id' => $tenant->id,
-                    'branch_id' => $validated['branch_id'] ?? null,
+                    'branch_id' => $validated['branch_id'],
                     'patient_id' => $validated['patient_id'],
-                    'appointment_id' => $validated['appointment_id'] ?? null,
+                    'appointment_id' =>
+                        $validated['appointment_id'] ?? null,
                     'queue_date' => $validated['queue_date'],
                     'queue_number' => ((int) $lastNumber) + 1,
                     'status' => 'waiting',
@@ -191,7 +258,8 @@ class QueueController extends Controller
             return back()
                 ->withInput()
                 ->withErrors([
-                    'queue' => 'The queue could not be created. Please try again.',
+                    'queue' =>
+                        'The queue could not be created. Please try again.',
                 ]);
         }
 
@@ -199,7 +267,10 @@ class QueueController extends Controller
             ->route('clinic.queues.index', [
                 'date' => $validated['queue_date'],
             ])
-            ->with('success', 'Patient added to the queue successfully.');
+            ->with(
+                'success',
+                'Patient added to the queue successfully.'
+            );
     }
 
     public function updateStatus(
@@ -274,6 +345,9 @@ class QueueController extends Controller
             ->route('clinic.queues.index', [
                 'date' => $queue->queue_date->toDateString(),
             ])
-            ->with('success', 'Queue status updated successfully.');
+            ->with(
+                'success',
+                'Queue status updated successfully.'
+            );
     }
 }
