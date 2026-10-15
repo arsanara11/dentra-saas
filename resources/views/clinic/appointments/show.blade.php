@@ -1,8 +1,9 @@
-`<x-app-layout>
+<x-app-layout>
     @php
         $statusStyles = [
             'scheduled' => 'bg-[#EAF4FF] text-[#5B9DF9]',
             'confirmed' => 'bg-[#F3EBFF] text-[#8B7CFF]',
+            'checked_in' => 'bg-[#E4F7F5] text-[#2BA89B]',
             'completed' => 'bg-[#E9F9F0] text-[#43A96E]',
             'cancelled' => 'bg-[#FCEBF0] text-[#D97791]',
             'no_show' => 'bg-[#FFF4E4] text-[#D99A3D]',
@@ -11,6 +12,7 @@
         $statusLabels = [
             'scheduled' => 'Scheduled',
             'confirmed' => 'Confirmed',
+            'checked_in' => 'Checked In',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
             'no_show' => 'No Show',
@@ -20,6 +22,17 @@
             ($appointment->patient->first_name ?? '') . ' ' .
             ($appointment->patient->last_name ?? '')
         );
+
+        $canCheckIn = auth()->user()->hasPermission('queues.create', $tenant);
+        $canViewQueue = auth()->user()->hasPermission('queues.view', $tenant);
+
+        $today = \Carbon\Carbon::now(
+            $tenant->timezone ?: config('app.timezone')
+        )->toDateString();
+
+        $canCheckInNow = $canCheckIn
+            && in_array($appointment->status, ['scheduled', 'confirmed'], true)
+            && $appointment->appointment_date->toDateString() === $today;
     @endphp
 
     <div class="min-h-screen bg-[#EEF4F8]">
@@ -48,6 +61,16 @@
                         </div>
                     @endif
 
+                    @if ($errors->any())
+                        <div class="mt-5 rounded-2xl border border-[#F4D5DC] bg-[#FFF8FA] px-5 py-4 text-sm text-[#C45F78]">
+                            <ul class="list-inside list-disc space-y-1">
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
                     <div class="mt-8 flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
                         <div>
                             <p class="text-sm font-medium text-[#8090A5]">
@@ -69,7 +92,26 @@
                                 Back to Appointments
                             </a>
 
+                            @if ($canCheckInNow)
+                                <form method="POST"
+                                      action="{{ route('clinic.appointments.check-in', $appointment) }}">
+                                    @csrf
+                                    <button type="submit"
+                                            class="inline-flex items-center justify-center gap-2 rounded-[14px] bg-[#2BA89B] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#249A8E]">
+                                        Check In Patient
+                                    </button>
+                                </form>
+                            @endif
+
+                            @if ($appointment->queue && $canViewQueue)
+                                <a href="{{ route('clinic.queues.show', $appointment->queue) }}"
+                                   class="inline-flex items-center justify-center gap-2 rounded-[14px] border border-[#CFEDEA] bg-[#F1FBFA] px-5 py-3 text-sm font-semibold text-[#2BA89B] transition hover:bg-[#E4F7F5]">
+                                    Ticket {{ $appointment->queue->ticket_number }}
+                                </a>
+                            @endif
+
                             @canDent('appointments.update')
+                                @if ($appointment->status !== 'checked_in')
                                 <a href="{{ route('clinic.appointments.edit', $appointment) }}"
                                    class="inline-flex items-center justify-center gap-2 rounded-[14px] bg-[#5B9DF9] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4E91F0]">
                                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -77,6 +119,7 @@
                                     </svg>
                                     Edit Appointment
                                 </a>
+                                @endif
                             @endcanDent
                         </div>
                     </div>

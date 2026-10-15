@@ -3,6 +3,7 @@
         $statusStyles = [
             'scheduled' => 'bg-[#EAF4FF] text-[#5B9DF9]',
             'confirmed' => 'bg-[#F3EBFF] text-[#8B7CFF]',
+            'checked_in' => 'bg-[#E4F7F5] text-[#2BA89B]',
             'completed' => 'bg-[#E9F9F0] text-[#43A96E]',
             'cancelled' => 'bg-[#FCEBF0] text-[#D97791]',
             'no_show' => 'bg-[#FFF4E4] text-[#D99A3D]',
@@ -11,10 +12,18 @@
         $statusLabels = [
             'scheduled' => 'Scheduled',
             'confirmed' => 'Confirmed',
+            'checked_in' => 'Checked In',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
             'no_show' => 'No Show',
         ];
+
+        // Check-in is only offered to users who may create queue tickets.
+        $canCheckIn = auth()->user()->hasPermission('queues.create', $tenant);
+
+        $today = \Carbon\Carbon::now(
+            $tenant->timezone ?: config('app.timezone')
+        )->toDateString();
     @endphp
 
     <div class="min-h-screen bg-[#EEF4F8]">
@@ -260,9 +269,9 @@
 
                 {{-- DIRECTORY HEADER AND FILTERS --}}
                 <div class="px-6 py-7 sm:px-7 lg:px-8">
-                    <div class="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+                    <div class="flex flex-col gap-6 2xl:flex-row 2xl:items-center 2xl:justify-between">
 
-                        <div>
+                        <div class="shrink-0">
                             <div class="flex items-center gap-3">
                                 <div class="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[#E8F3FF] text-[#5B9DF9]">
                                     <svg xmlns="http://www.w3.org/2000/svg"
@@ -290,10 +299,10 @@
 
                         <form method="GET"
                               action="{{ route('clinic.appointments.index') }}"
-                              class="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:w-auto xl:grid-cols-4">
+                              class="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] 2xl:w-[860px] 2xl:shrink-0">
 
                             {{-- SEARCH --}}
-                            <div class="relative sm:col-span-2 xl:col-span-1">
+                            <div class="relative min-w-0 sm:col-span-2 xl:col-span-1">
                                 <svg xmlns="http://www.w3.org/2000/svg"
                                      class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#A1AFBF]"
                                      fill="none"
@@ -308,7 +317,7 @@
                                     name="search"
                                     value="{{ $search ?? '' }}"
                                     placeholder="Search appointments..."
-                                    class="w-full rounded-[17px] border border-[#DCE6EE] bg-[#F8FAFC] py-3.5 pl-11 pr-4 text-sm font-medium text-[#263550] outline-none transition placeholder:text-[#A1AFBF] focus:border-[#9CC7FF] focus:bg-white focus:ring-4 focus:ring-[#EAF4FF] xl:w-[250px]"
+                                    class="w-full rounded-[17px] border border-[#DCE6EE] bg-[#F8FAFC] py-3.5 pl-11 pr-4 text-sm font-medium text-[#263550] outline-none transition placeholder:text-[#A1AFBF] focus:border-[#9CC7FF] focus:bg-white focus:ring-4 focus:ring-[#EAF4FF]"
                                 >
                             </div>
 
@@ -476,11 +485,28 @@
                                                 View
                                             </a>
 
+                                            @if (
+                                                $canCheckIn
+                                                && in_array($appointment->status, ['scheduled', 'confirmed'], true)
+                                                && $appointment->appointment_date->toDateString() === $today
+                                            )
+                                                <form method="POST"
+                                                      action="{{ route('clinic.appointments.check-in', $appointment) }}">
+                                                    @csrf
+                                                    <button type="submit"
+                                                            class="inline-flex items-center justify-center rounded-[11px] bg-[#E4F7F5] px-3.5 py-2 text-xs font-semibold text-[#2BA89B] transition hover:bg-[#D5F0EC]">
+                                                        Check In
+                                                    </button>
+                                                </form>
+                                            @endif
+
                                             @canDent('appointments.update')
-                                                <a href="{{ route('clinic.appointments.edit', $appointment) }}"
-                                                   class="inline-flex items-center justify-center rounded-[11px] bg-[#E8F3FF] px-3.5 py-2 text-xs font-semibold text-[#5B9DF9] transition hover:bg-[#DDEEFF]">
-                                                    Edit
-                                                </a>
+                                                @if ($appointment->status !== 'checked_in')
+                                                    <a href="{{ route('clinic.appointments.edit', $appointment) }}"
+                                                       class="inline-flex items-center justify-center rounded-[11px] bg-[#E8F3FF] px-3.5 py-2 text-xs font-semibold text-[#5B9DF9] transition hover:bg-[#DDEEFF]">
+                                                        Edit
+                                                    </a>
+                                                @endif
                                             @endcanDent
                                         </div>
                                     </td>

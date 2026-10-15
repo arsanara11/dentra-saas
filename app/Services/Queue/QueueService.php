@@ -151,6 +151,50 @@ class QueueService
     }
 
     /**
+     * Check a patient in for their appointment.
+     *
+     * Issues a queue ticket linked to the appointment and moves the
+     * appointment to "checked_in" in the same transaction. Only possible
+     * on the day of the appointment.
+     *
+     * Accepted keys in $options: doctor_id, priority
+     *
+     * @param  array<string, mixed>  $options
+     *
+     * @throws QueueException
+     */
+    public function checkInAppointment(
+        Tenant $tenant,
+        User $actor,
+        int $appointmentId,
+        array $options = []
+    ): Queue {
+        $appointment = Appointment::query()
+            ->where('tenant_id', $tenant->id)
+            ->whereKey($appointmentId)
+            ->first();
+
+        if (! $appointment) {
+            throw new QueueException('The selected appointment was not found.');
+        }
+
+        $today = $this->today($tenant);
+
+        if ($appointment->appointment_date->toDateString() !== $today) {
+            throw new QueueException('Check-in is only available on the day of the appointment.');
+        }
+
+        return $this->enqueue($tenant, $actor, [
+            'patient_id' => $appointment->patient_id,
+            'appointment_id' => $appointment->id,
+            'branch_id' => $appointment->branch_id,
+            'doctor_id' => $options['doctor_id'] ?? null,
+            'priority' => $options['priority'] ?? Queue::PRIORITY_NORMAL,
+            'queue_date' => $today,
+        ]);
+    }
+
+    /**
      * Call the next waiting ticket.
      *
      * Order: emergency, then priority, then normal; first come first
@@ -341,6 +385,7 @@ class QueueService
         // result set). Soft-deleted rows are included because the unique
         // index still counts them.
         $prefix = $this->normalisePrefix($data['prefix'] ?? null);
+        $appointmentStatusBefore = $appointment?->status;
 
         $lastNumber = Queue::withTrashed()
             ->where('tenant_id', $tenant->id)
@@ -364,11 +409,17 @@ class QueueService
             'updated_by' => $actor->id,
         ]);
 
+        // A ticket linked to an appointment means the patient has arrived.
+        if ($appointment) {
+            $appointment->update(['status' => Appointment::STATUS_CHECKED_IN]);
+        }
+
         $this->recordEvent($queue, QueueEvent::TYPE_CREATED, null, $queue->status, $actor, [
             'ticket_number' => $queue->ticket_number,
             'priority' => $priority,
             'source' => $appointment ? 'appointment' : 'walk_in',
             'appointment_id' => $appointment?->id,
+            'appointment_status_before' => $appointmentStatusBefore,
             'doctor_id' => $doctor?->id,
         ]);
 
@@ -436,10 +487,16 @@ class QueueService
 
         $queue->update($attributes);
 
+        $appointmentStatus = $this->syncAppointment($queue, $action);
+
         $metadata = [
             'action' => $action,
             'ticket_number' => $queue->ticket_number,
         ];
+
+        if ($appointmentStatus !== null) {
+            $metadata['appointment_status'] = $appointmentStatus;
+        }
 
         $reason = $this->normaliseReason($reason);
 
@@ -465,6 +522,71 @@ class QueueService
         );
 
         return $queue;
+    }
+
+    /**
+     * Keep the linked appointment in step with its ticket.
+     *
+     *   complete → appointment "completed"
+     *   no_show  → appointment "no_show"
+     *   cancel   → check-in is undone: back to the status it had before
+     *
+     * Only an appointment that is still "checked_in" is touched, so a
+     * manual change made by staff is never overwritten.
+     *
+     * @return string|null The new appointment status, or null if unchanged.
+     */
+    protected function syncAppointment(Queue $queue, string $action): ?string
+    {
+        if (! $queue->appointment_id) {
+            return null;
+        }
+
+        $newStatus = match ($action) {
+            'complete' => Appointment::STATUS_COMPLETED,
+            'no_show' => Appointment::STATUS_NO_SHOW,
+            'cancel' => $this->statusBeforeCheckIn($queue),
+            default => null,
+        };
+
+        if ($newStatus === null) {
+            return null;
+        }
+
+        $appointment = Appointment::query()
+            ->where('tenant_id', $queue->tenant_id)
+            ->whereKey($queue->appointment_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $appointment || $appointment->status !== Appointment::STATUS_CHECKED_IN) {
+            return null;
+        }
+
+        $appointment->update(['status' => $newStatus]);
+
+        return $newStatus;
+    }
+
+    /**
+     * The appointment status recorded when the ticket was created.
+     */
+    protected function statusBeforeCheckIn(Queue $queue): string
+    {
+        $created = QueueEvent::query()
+            ->where('tenant_id', $queue->tenant_id)
+            ->where('queue_id', $queue->id)
+            ->where('event_type', QueueEvent::TYPE_CREATED)
+            ->first();
+
+        $before = $created?->metadata['appointment_status_before'] ?? null;
+
+        return in_array($before, [
+            Appointment::STATUS_SCHEDULED,
+            Appointment::STATUS_CONFIRMED,
+        ], true)
+            ? $before
+            : Appointment::STATUS_SCHEDULED;
     }
 
     /**
@@ -594,9 +716,16 @@ class QueueService
             throw new QueueException('The selected appointment does not belong to this patient.');
         }
 
-        if (in_array($appointment->status, ['cancelled', 'no_show', 'completed'], true)) {
+        if ($appointment->status === Appointment::STATUS_CHECKED_IN) {
+            throw new QueueException('This appointment is already checked in.');
+        }
+
+        if (! in_array($appointment->status, [
+            Appointment::STATUS_SCHEDULED,
+            Appointment::STATUS_CONFIRMED,
+        ], true)) {
             throw new QueueException(sprintf(
-                'A %s appointment cannot be queued.',
+                'A %s appointment cannot be checked in.',
                 str_replace('_', ' ', $appointment->status)
             ));
         }

@@ -52,6 +52,11 @@ Route::middleware(['auth', 'verified', 'active.tenant'])
                 Route::resource('patients', PatientController::class);
 
                 // Appointments
+                Route::post('appointments/{appointment}/check-in', [AppointmentController::class, 'checkIn'])
+                    ->whereNumber('appointment')
+                    ->middleware('throttle:30,1')
+                    ->name('appointments.check-in');
+
                 Route::resource('appointments', AppointmentController::class);
 
                 // Doctors

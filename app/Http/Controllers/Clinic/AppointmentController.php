@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers\Clinic;
 
+use App\Exceptions\QueueException;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Branch;
 use App\Models\Patient;
+use App\Models\Queue;
+use App\Services\Queue\QueueService;
 use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -18,7 +21,8 @@ use Illuminate\View\View;
 class AppointmentController extends Controller
 {
     public function __construct(
-        protected TenantContext $tenantContext
+        protected TenantContext $tenantContext,
+        protected QueueService $queueService
     ) {}
 
     /**
@@ -167,7 +171,7 @@ class AppointmentController extends Controller
             (int) $tenant->id
         );
 
-        $appointment->load(['patient', 'branch', 'creator']);
+        $appointment->load(['patient', 'branch', 'creator', 'queue']);
 
         return view('clinic.appointments.show', compact(
             'tenant',
@@ -232,6 +236,8 @@ class AppointmentController extends Controller
             (int) $tenant->id
         );
 
+        $this->ensureNotCheckedIn($appointment);
+
         $validated = $this->validateAppointment(
             $request,
             (int) $tenant->id
@@ -240,13 +246,7 @@ class AppointmentController extends Controller
         $validated['status'] = $request->validate([
             'status' => [
                 'required',
-                Rule::in([
-                    'scheduled',
-                    'confirmed',
-                    'completed',
-                    'cancelled',
-                    'no_show',
-                ]),
+                Rule::in(Appointment::MANUAL_STATUSES),
             ],
         ])['status'];
 
@@ -261,6 +261,55 @@ class AppointmentController extends Controller
         return redirect()
             ->route('clinic.appointments.show', $appointment)
             ->with('success', 'Appointment updated successfully.');
+    }
+
+    /**
+     * Check a patient in for their appointment.
+     *
+     * Issues a queue ticket and marks the appointment as checked in.
+     */
+    public function checkIn(
+        Request $request,
+        Appointment $appointment
+    ): RedirectResponse {
+        $tenant = $this->tenantContext->require();
+        $user = $request->user();
+
+        abort_unless($user->hasPermission('appointments.view', $tenant), 403);
+        abort_unless($user->hasPermission('queues.create', $tenant), 403);
+
+        $this->ensureAppointmentBelongsToTenant(
+            $appointment,
+            (int) $tenant->id
+        );
+
+        $validated = $request->validate([
+            'doctor_id' => ['nullable', 'integer'],
+            'priority' => ['nullable', Rule::in(Queue::PRIORITIES)],
+        ]);
+
+        // Jumping the line needs the right to manage the queue.
+        if (
+            ($validated['priority'] ?? Queue::PRIORITY_NORMAL) !== Queue::PRIORITY_NORMAL
+        ) {
+            abort_unless($user->hasPermission('queues.update', $tenant), 403);
+        }
+
+        try {
+            $queue = $this->queueService->checkInAppointment(
+                $tenant,
+                $user,
+                (int) $appointment->id,
+                $validated
+            );
+        } catch (QueueException $exception) {
+            return back()->withErrors(['appointment' => $exception->getMessage()]);
+        }
+
+        return back()->with(
+            'success',
+            "Patient checked in. Queue ticket {$queue->ticket_number} has been issued."
+        );
     }
 
     /**
@@ -281,6 +330,8 @@ class AppointmentController extends Controller
             $appointment,
             (int) $tenant->id
         );
+
+        $this->ensureNotCheckedIn($appointment);
 
         $appointment->delete();
 
@@ -319,13 +370,7 @@ class AppointmentController extends Controller
                 });
             })
             ->when(
-                in_array($status, [
-                    'scheduled',
-                    'confirmed',
-                    'completed',
-                    'cancelled',
-                    'no_show',
-                ], true),
+                in_array($status, Appointment::STATUSES, true),
                 fn (Builder $query) => $query->where('status', $status)
             )
             ->when(
@@ -426,6 +471,19 @@ class AppointmentController extends Controller
         if ($conflict) {
             throw ValidationException::withMessages([
                 'start_time' => 'This patient already has an appointment that overlaps with the selected time.',
+            ]);
+        }
+    }
+
+    /**
+     * A checked-in appointment is owned by the queue until the ticket is
+     * completed, cancelled or marked as no-show.
+     */
+    private function ensureNotCheckedIn(Appointment $appointment): void
+    {
+        if ($appointment->status === Appointment::STATUS_CHECKED_IN) {
+            throw ValidationException::withMessages([
+                'appointment' => 'This appointment is checked in. Manage it from the Queue page.',
             ]);
         }
     }

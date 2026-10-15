@@ -1,5 +1,48 @@
 <x-app-layout>
 
+    @php
+        $queueStatusStyles = [
+            'waiting' => 'bg-[#FFF4E4] text-[#D99A3D]',
+            'called' => 'bg-[#EAF4FF] text-[#5B9DF9]',
+            'serving' => 'bg-[#F3EBFF] text-[#8B7CFF]',
+            'completed' => 'bg-[#E9F9F0] text-[#43A96E]',
+            'skipped' => 'bg-[#FFF1E6] text-[#E8833A]',
+            'no_show' => 'bg-[#F1F3F6] text-[#7C8595]',
+            'cancelled' => 'bg-[#FCEBF0] text-[#D97791]',
+        ];
+
+        $queueStatusLabels = [
+            'waiting' => 'Waiting',
+            'called' => 'Called',
+            'serving' => 'In Service',
+            'completed' => 'Completed',
+            'skipped' => 'Skipped',
+            'no_show' => 'No-show',
+            'cancelled' => 'Cancelled',
+        ];
+
+        $liveTiles = [
+            [
+                'label' => 'Waiting',
+                'value' => $queueSummary['waiting'],
+                'tone' => 'bg-[#EAF4FF] text-[#5B9DF9]',
+                'icon' => 'M12 7v5l3 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z',
+            ],
+            [
+                'label' => 'Called',
+                'value' => $queueSummary['called'],
+                'tone' => 'bg-[#F7ECFF] text-[#9B72E9]',
+                'icon' => 'M3 10v4h4l5 4V6l-5 4H3zM16 9a5 5 0 0 1 0 6',
+            ],
+            [
+                'label' => 'In Service',
+                'value' => $queueSummary['serving'],
+                'tone' => 'bg-[#FFF1F5] text-[#D985AA]',
+                'icon' => 'M5 13l4 4L19 7',
+            ],
+        ];
+    @endphp
+
     <div class="mx-auto w-full max-w-[1550px]">
 
         {{-- =========================================================
@@ -15,7 +58,7 @@
                 </p>
 
                 <h1 class="text-[30px] font-semibold tracking-[-0.04em] text-[#273047] sm:text-[34px]">
-                    Good Morning,
+                    {{ $greeting }},
                     <span class="text-[#4E91EF]">
                         {{ auth()->user()->name }}
                     </span>
@@ -34,7 +77,7 @@
                 </p>
 
                 <p class="mt-0.5 text-sm font-semibold text-[#344057]">
-                    {{ now()->format('d F Y') }}
+                    {{ $today->format('d F Y') }}
                 </p>
 
             </div>
@@ -249,37 +292,24 @@
                     <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.82fr)]">
 
 
-                        {{-- PATIENT LIST --}}
+                        {{-- TODAY'S QUEUE --}}
 
                         <div>
 
                             <div class="mb-4 flex items-center justify-between">
 
                                 <h2 class="text-[17px] font-semibold text-[#273047]">
-                                    Patient List
+                                    Today's Queue
                                 </h2>
 
-                                <button
-                                    type="button"
-                                    class="flex items-center gap-2 rounded-xl border border-[#E9EEF4] bg-[#FAFBFD] px-3 py-2 text-xs font-medium text-[#59657A]"
-                                >
-                                    Today
-
-                                    <svg
-                                        class="h-3.5 w-3.5"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="1.8"
-                                        viewBox="0 0 24 24"
+                                @if ($canViewQueue)
+                                    <a
+                                        href="{{ route('clinic.queues.index') }}"
+                                        class="flex items-center gap-2 rounded-xl border border-[#E9EEF4] bg-[#FAFBFD] px-3 py-2 text-xs font-medium text-[#59657A] transition hover:bg-white"
                                     >
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            d="m6 9 6 6 6-6"
-                                        />
-                                    </svg>
-
-                                </button>
+                                        View queue
+                                    </a>
+                                @endif
 
                             </div>
 
@@ -287,10 +317,15 @@
                             <div class="rounded-[22px] border border-[#D6E2EC] bg-[#F7FAFC] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
 
 
-                                @forelse($recentPatients as $patient)
+                                @forelse($queueToday as $ticket)
+
+                                    @php
+                                        $ticketPatient = $ticket->patient;
+                                        $ticketName = $ticketPatient->full_name ?? 'Unknown patient';
+                                    @endphp
 
                                     <a
-                                        href="{{ route('clinic.patients.show', $patient) }}"
+                                        href="{{ route('clinic.queues.show', $ticket) }}"
                                         class="group mb-2 flex items-center justify-between gap-3 rounded-[15px] border border-[#E1E9F0] bg-white px-3 py-3 shadow-[0_3px_10px_rgba(55,80,105,0.035)] transition hover:border-[#A8CEF5] hover:shadow-[0_5px_15px_rgba(91,157,249,0.10)] last:mb-0"
                                     >
 
@@ -299,18 +334,18 @@
                                             <div
                                                 class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EAF4FF] text-xs font-semibold text-[#5B9DF9]"
                                             >
-                                                {{ strtoupper(substr($patient->first_name, 0, 1)) }}
+                                                {{ strtoupper(substr($ticketPatient->first_name ?? '?', 0, 1)) }}
                                             </div>
 
 
                                             <div class="min-w-0">
 
                                                 <p class="truncate text-sm font-semibold text-[#344057]">
-                                                    {{ $patient->full_name }}
+                                                    {{ $ticketName }}
                                                 </p>
 
                                                 <p class="mt-0.5 truncate text-[10px] text-[#91A0B2]">
-                                                    {{ $patient->patient_number }}
+                                                    {{ $ticket->ticket_number }} · {{ $ticketPatient->patient_number ?? '—' }}
                                                 </p>
 
                                             </div>
@@ -318,17 +353,27 @@
                                         </div>
 
 
-                                        <span
-                                            class="shrink-0 rounded-lg bg-[#29354A] px-2.5 py-1.5 text-[10px] font-semibold text-white"
-                                        >
-                                            View
-                                        </span>
+                                        <div class="flex shrink-0 items-center gap-2">
+
+                                            <span
+                                                class="hidden rounded-full px-2 py-1 text-[9px] font-semibold sm:inline-flex {{ $queueStatusStyles[$ticket->status] ?? 'bg-[#F1F3F6] text-[#7C8595]' }}"
+                                            >
+                                                {{ $queueStatusLabels[$ticket->status] ?? ucfirst(str_replace('_', ' ', $ticket->status)) }}
+                                            </span>
+
+                                            <span
+                                                class="rounded-lg bg-[#29354A] px-2.5 py-1.5 text-[10px] font-semibold text-white"
+                                            >
+                                                View
+                                            </span>
+
+                                        </div>
 
                                     </a>
 
                                 @empty
 
-                                    <div class="flex min-h-[220px] flex-col items-center justify-center rounded-[17px] border border-[#D9E5EE] bg-white text-center">
+                                    <div class="flex min-h-[220px] flex-col items-center justify-center rounded-[17px] border border-[#D9E5EE] bg-white px-4 text-center">
 
                                         <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#EAF4FF] text-[#5B9DF9]">
 
@@ -356,11 +401,15 @@
                                         </div>
 
                                         <p class="text-sm font-semibold text-[#344057]">
-                                            No patients yet
+                                            No patients in the queue today
                                         </p>
 
                                         <p class="mt-1 text-xs text-[#96A1B1]">
-                                            Your recent patients will appear here.
+                                            @if ($canViewQueue)
+                                                Patients who arrive today will appear here.
+                                            @else
+                                                You do not have access to the queue.
+                                            @endif
                                         </p>
 
                                     </div>
@@ -373,14 +422,14 @@
                         </div>
 
 
-                        {{-- CONSULTATION --}}
+                        {{-- LIVE QUEUE --}}
 
                         <div>
 
                             <div class="mb-4 flex items-center justify-between">
 
                                 <h2 class="text-[17px] font-semibold text-[#273047]">
-                                    Consultation
+                                    Live Queue
                                 </h2>
 
                                 <span
@@ -410,21 +459,20 @@
 
                             <div class="rounded-[22px] border border-[#D6E2EC] bg-[#F7FAFC] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
 
-
                                 <div class="flex items-center gap-3">
 
-                                    <div class="flex h-11 w-11 items-center justify-center rounded-full border border-[#C9DFF5] bg-[#DCEEFF] text-sm font-bold text-[#4E91EF]">
-                                        D
+                                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#C9DFF5] bg-[#DCEEFF] text-[11px] font-bold text-[#4E91EF]">
+                                        {{ $nowServing?->ticket_number ?? '—' }}
                                     </div>
 
                                     <div>
 
                                         <p class="text-sm font-semibold text-[#344057]">
-                                            Today's Consultation
+                                            Today's Queue
                                         </p>
 
                                         <p class="mt-0.5 text-[10px] text-[#96A1B1]">
-                                            Clinical overview
+                                            Live status
                                         </p>
 
                                     </div>
@@ -434,107 +482,65 @@
 
                                 <div class="mt-5 grid grid-cols-3 gap-2">
 
+                                    @foreach($liveTiles as $tile)
 
-                                    <div class="rounded-[15px] border border-[#E6EDF3] bg-white p-3 text-center shadow-[0_3px_10px_rgba(55,80,105,0.035)]">
+                                        <div class="rounded-[15px] border border-[#E6EDF3] bg-white p-3 text-center shadow-[0_3px_10px_rgba(55,80,105,0.03)]">
 
-                                        <div class="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-[#EAF4FF] text-[#5B9DF9]">
+                                            <div class="mx-auto flex h-8 w-8 items-center justify-center rounded-lg {{ $tile['tone'] }}">
+                                                <svg
+                                                    class="h-4 w-4"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="1.7"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        d="{{ $tile['icon'] }}"
+                                                    />
+                                                </svg>
+                                            </div>
 
-                                            <svg
-                                                class="h-4 w-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                stroke-width="1.7"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    stroke-linecap="round"
-                                                    d="M4 12h16M12 4v16"
-                                                />
-                                            </svg>
+                                            <p class="mt-2 text-lg font-semibold leading-none text-[#273047]">
+                                                {{ $tile['value'] }}
+                                            </p>
 
-                                        </div>
-
-                                        <p class="mt-2 text-[10px] text-[#8995A7]">
-                                            Checkups
-                                        </p>
-
-                                    </div>
-
-
-                                    <div class="rounded-[15px] border border-[#E6EDF3] bg-white p-3 text-center shadow-[0_3px_10px_rgba(55,80,105,0.035)]">
-
-                                        <div class="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-[#F7ECFF] text-[#9B72E9]">
-
-                                            <svg
-                                                class="h-4 w-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                stroke-width="1.7"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <circle
-                                                    cx="12"
-                                                    cy="12"
-                                                    r="7"
-                                                />
-                                                <path
-                                                    stroke-linecap="round"
-                                                    d="M9 12h6"
-                                                />
-                                            </svg>
+                                            <p class="mt-1.5 text-[10px] text-[#8995A7]">
+                                                {{ $tile['label'] }}
+                                            </p>
 
                                         </div>
 
-                                        <p class="mt-2 text-[10px] text-[#8995A7]">
-                                            Treatment
-                                        </p>
-
-                                    </div>
-
-
-                                    <div class="rounded-[15px] border border-[#E6EDF3] bg-white p-3 text-center shadow-[0_3px_10px_rgba(55,80,105,0.035)]">
-
-                                        <div class="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFF1F5] text-[#D985AA]">
-
-                                            <svg
-                                                class="h-4 w-4"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                stroke-width="1.7"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    stroke-linecap="round"
-                                                    d="M7 12h10M12 7v10"
-                                                />
-                                            </svg>
-
-                                        </div>
-
-                                        <p class="mt-2 text-[10px] text-[#8995A7]">
-                                            Follow-up
-                                        </p>
-
-                                    </div>
+                                    @endforeach
 
                                 </div>
 
 
                                 <div class="mt-5 border-t border-dashed border-[#DDE4EC] pt-4">
 
-                                    <div class="flex items-center justify-between">
+                                    <div class="flex items-center justify-between gap-3">
 
                                         <span class="text-[10px] text-[#8D99AA]">
-                                            Clinic status
+                                            Now serving
                                         </span>
 
-                                        <span class="flex items-center gap-1.5 text-[10px] font-semibold text-[#45B77A]">
-
-                                            <span class="h-1.5 w-1.5 rounded-full bg-[#45B77A]"></span>
-
-                                            Operational
-
-                                        </span>
+                                        @if ($nowServing)
+                                            <span class="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold text-[#8B7CFF]">
+                                                <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-[#8B7CFF]"></span>
+                                                <span class="truncate">
+                                                    {{ $nowServing->ticket_number }}
+                                                    @if ($nowServing->patient)
+                                                        · {{ $nowServing->patient->full_name }}
+                                                    @endif
+                                                </span>
+                                            </span>
+                                        @else
+                                            <span class="flex items-center gap-1.5 text-[10px] font-semibold text-[#9AA5B4]">
+                                                <span class="h-1.5 w-1.5 rounded-full bg-[#C4CCD8]"></span>
+                                                No one in service
+                                            </span>
+                                        @endif
 
                                     </div>
 
@@ -574,19 +580,21 @@
 
                         <div class="flex gap-1">
 
-                            <button
-                                type="button"
+                            <a
+                                href="{{ route('dashboard', ['month' => $calendar['prev']]) }}"
+                                aria-label="Previous month"
                                 class="flex h-7 w-7 items-center justify-center rounded-lg text-[#8995A7] hover:bg-[#F4F7FA]"
                             >
                                 ‹
-                            </button>
+                            </a>
 
-                            <button
-                                type="button"
+                            <a
+                                href="{{ route('dashboard', ['month' => $calendar['next']]) }}"
+                                aria-label="Next month"
                                 class="flex h-7 w-7 items-center justify-center rounded-lg text-[#8995A7] hover:bg-[#F4F7FA]"
                             >
                                 ›
-                            </button>
+                            </a>
 
                         </div>
 
@@ -594,7 +602,7 @@
 
 
                     <p class="mt-2 text-xs text-[#8995A7]">
-                        {{ now()->format('F Y') }}
+                        {{ $calendar['label'] }}
                     </p>
 
 
@@ -605,43 +613,45 @@
                         <div class="grid grid-cols-7 gap-1 text-center">
 
                             @foreach(['SUN','MON','TUE','WED','THU','FRI','SAT'] as $day)
-
                                 <span class="py-1 text-[8px] font-semibold tracking-wide text-[#A1AAB8]">
                                     {{ $day }}
                                 </span>
-
                             @endforeach
 
-
-                            @php
-                                $firstDay = now()->startOfMonth()->dayOfWeek;
-                                $daysInMonth = now()->daysInMonth;
-                            @endphp
-
-
-                            @for($i = 0; $i < $firstDay; $i++)
-
+                            @for($i = 0; $i < $calendar['firstDay']; $i++)
                                 <span class="h-8"></span>
-
                             @endfor
 
-
-                            @for($day = 1; $day <= $daysInMonth; $day++)
+                            @for($day = 1; $day <= $calendar['daysInMonth']; $day++)
 
                                 @php
-                                    $isToday = $day === now()->day;
+                                    $isToday = $day === $calendar['todayDay'];
+                                    $busyCount = $calendar['busy'][$day] ?? 0;
+                                    $dayClass = $isToday
+                                        ? 'bg-[#5B9DF9] text-white shadow-[0_4px_10px_rgba(91,157,249,0.22)]'
+                                        : 'text-[#4F5A6E] hover:bg-[#F3F7FB]';
+                                    $dotClass = $isToday ? 'bg-white' : 'bg-[#5B9DF9]';
                                 @endphp
 
                                 <div class="flex h-8 items-center justify-center">
 
-                                    <span
-                                        class="flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-medium
-                                        {{ $isToday
-                                            ? 'bg-[#5B9DF9] text-white shadow-[0_4px_10px_rgba(91,157,249,0.22)]'
-                                            : 'text-[#4F5A6E] hover:bg-[#F3F7FB]' }}"
-                                    >
-                                        {{ $day }}
-                                    </span>
+                                    @if ($canViewAppointments)
+                                        <a
+                                            href="{{ route('clinic.appointments.index', ['date' => $calendar['month'] . '-' . str_pad($day, 2, '0', STR_PAD_LEFT)]) }}"
+                                            @if ($busyCount > 0) title="{{ $busyCount }} {{ \Illuminate\Support\Str::plural('appointment', $busyCount) }}" @endif
+                                            class="relative flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-medium {{ $dayClass }}"
+                                        >
+                                            {{ $day }}
+
+                                            @if ($busyCount > 0)
+                                                <span class="absolute bottom-0.5 h-1 w-1 rounded-full {{ $dotClass }}"></span>
+                                            @endif
+                                        </a>
+                                    @else
+                                        <span class="flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-medium {{ $dayClass }}">
+                                            {{ $day }}
+                                        </span>
+                                    @endif
 
                                 </div>
 
@@ -662,24 +672,26 @@
                                 Upcoming
                             </h3>
 
-                            <a
-                                href="#"
-                                class="text-[10px] font-medium text-[#4E91EF] hover:underline"
-                            >
-                                View All
-                            </a>
+                            @if ($canViewAppointments)
+                                <a
+                                    href="{{ route('clinic.appointments.index') }}"
+                                    class="text-[10px] font-medium text-[#4E91EF] hover:underline"
+                                >
+                                    View All
+                                </a>
+                            @endif
 
                         </div>
 
 
-                        @foreach($schedule as $item)
+                        @forelse($upcoming as $item)
 
-                            <div
-                                class="mb-2.5 flex items-center gap-3 rounded-[16px] bg-[#EDF6FF] px-3 py-3 last:mb-0"
+                            <a
+                                href="{{ $item['url'] }}"
+                                class="mb-2.5 flex items-center gap-3 rounded-[16px] bg-[#EDF6FF] px-3 py-3 transition hover:bg-[#E3F1FF] last:mb-0"
                             >
 
                                 <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#5B9DF9]">
-
                                     <svg
                                         class="h-4 w-4"
                                         fill="none"
@@ -699,9 +711,7 @@
                                             d="M8 3v4M16 3v4M4 10h16"
                                         />
                                     </svg>
-
                                 </div>
-
 
                                 <div class="min-w-0 flex-1">
 
@@ -709,15 +719,25 @@
                                         {{ $item['title'] }}
                                     </p>
 
-                                    <p class="mt-0.5 text-[9px] text-[#8A98AA]">
-                                        {{ $item['time'] }} · {{ $item['doctor'] }}
+                                    <p class="mt-0.5 truncate text-[9px] text-[#8A98AA]">
+                                        {{ $item['meta'] }}
                                     </p>
 
                                 </div>
 
-                            </div>
+                            </a>
 
-                        @endforeach
+                        @empty
+
+                            <p class="rounded-[16px] bg-[#F7FAFC] px-3 py-4 text-center text-[11px] text-[#8A98AA]">
+                                @if ($canViewAppointments)
+                                    No upcoming appointments.
+                                @else
+                                    You do not have access to appointments.
+                                @endif
+                            </p>
+
+                        @endforelse
 
                     </div>
 
@@ -735,15 +755,17 @@
                     <div class="flex items-center justify-between">
 
                         <h2 class="text-[17px] font-semibold text-[#273047]">
-                            Dentist Notes
+                            Today's Reminders
                         </h2>
 
-                        <button
-                            type="button"
-                            class="rounded-xl border border-[#E6EDF4] bg-white px-3 py-1.5 text-[10px] font-semibold text-[#59657A] transition hover:bg-[#F7FAFC]"
-                        >
-                            + Add note
-                        </button>
+                        @if ($canViewQueue)
+                            <a
+                                href="{{ route('clinic.queues.index') }}"
+                                class="rounded-xl border border-[#E6EDF4] bg-white px-3 py-1.5 text-[10px] font-semibold text-[#59657A] transition hover:bg-[#F7FAFC]"
+                            >
+                                Open queue
+                            </a>
+                        @endif
 
                     </div>
 
@@ -835,11 +857,11 @@
                             <div class="rounded-xl bg-white/85 px-3 py-2 shadow-sm backdrop-blur">
 
                                 <p class="text-[9px] font-semibold text-[#344057]">
-                                    Clinical reminder
+                                    Today's overview
                                 </p>
 
                                 <p class="mt-1 text-[8px] leading-relaxed text-[#8B97A8]">
-                                    Review today's patient records before consultation.
+                                    {{ $todayVisits }} {{ \Illuminate\Support\Str::plural('patient', $todayVisits) }} visiting today.
                                 </p>
 
                             </div>
@@ -849,16 +871,18 @@
                     </div>
 
 
-                    {{-- NOTES LIST --}}
+                    {{-- REMINDERS LIST --}}
 
                     <div class="mt-4 space-y-2">
 
-                        @foreach($notes as $note)
+                        @forelse($reminders as $reminder)
 
-                            <div class="flex items-center gap-3 rounded-[14px] bg-[#F9FBFD] px-3 py-2.5">
+                            <a
+                                href="{{ $reminder['url'] }}"
+                                class="flex items-center gap-3 rounded-[14px] bg-[#F9FBFD] px-3 py-2.5 transition hover:bg-[#F1F6FB]"
+                            >
 
                                 <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#EAF4FF] text-[#5B9DF9]">
-
                                     <svg
                                         class="h-3.5 w-3.5"
                                         fill="none"
@@ -876,25 +900,29 @@
                                             d="M8 9h8M8 13h6"
                                         />
                                     </svg>
-
                                 </div>
-
 
                                 <div class="min-w-0">
 
                                     <p class="truncate text-[10px] font-semibold text-[#4A566B]">
-                                        {{ $note['title'] }}
+                                        {{ $reminder['title'] }}
                                     </p>
 
                                     <p class="mt-0.5 text-[8px] text-[#9AA5B4]">
-                                        {{ $note['time'] }}
+                                        {{ $reminder['meta'] }}
                                     </p>
 
                                 </div>
 
-                            </div>
+                            </a>
 
-                        @endforeach
+                        @empty
+
+                            <p class="rounded-[14px] bg-[#F9FBFD] px-3 py-4 text-center text-[10px] text-[#8A98AA]">
+                                All clear. Nothing needs attention right now.
+                            </p>
+
+                        @endforelse
 
                     </div>
 
