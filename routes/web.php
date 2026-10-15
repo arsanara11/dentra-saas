@@ -7,6 +7,7 @@ use App\Http\Controllers\Clinic\DoctorController;
 use App\Http\Controllers\Clinic\PatientController;
 use App\Http\Controllers\Clinic\QueueController;
 use App\Http\Controllers\ProfileController;
+use App\Services\Queue\QueueService;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -60,16 +61,34 @@ Route::middleware(['auth', 'verified', 'active.tenant'])
                 Route::resource('dental-records', DentalRecordController::class);
 
                 // Queue Management
-                Route::get('/queues', [QueueController::class, 'index'])
-                    ->name('queues.index');
+                Route::controller(QueueController::class)
+                    ->prefix('queues')
+                    ->name('queues.')
+                    ->group(function () {
 
-                Route::post('/queues', [QueueController::class, 'store'])
-                    ->name('queues.store');
+                        Route::get('/', 'index')
+                            ->name('index');
 
-                Route::patch(
-                    '/queues/{queue}/status',
-                    [QueueController::class, 'updateStatus']
-                )->name('queues.status');
+                        Route::post('/', 'store')
+                            ->middleware('throttle:30,1')
+                            ->name('store');
+
+                        // Must stay above the "{queue}" routes.
+                        Route::post('/call-next', 'callNext')
+                            ->middleware('throttle:60,1')
+                            ->name('call-next');
+
+                        Route::get('/{queue}', 'show')
+                            ->whereNumber('queue')
+                            ->name('show');
+
+                        // call, recall, serve, complete, skip, no_show, cancel
+                        Route::post('/{queue}/{action}', 'perform')
+                            ->whereNumber('queue')
+                            ->whereIn('action', array_keys(QueueService::ACTIONS))
+                            ->middleware('throttle:60,1')
+                            ->name('action');
+                    });
             });
     });
 

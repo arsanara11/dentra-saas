@@ -5,6 +5,8 @@
             'called' => 'bg-[#EAF4FF] text-[#5B9DF9]',
             'serving' => 'bg-[#F3EBFF] text-[#8B7CFF]',
             'completed' => 'bg-[#E9F9F0] text-[#43A96E]',
+            'skipped' => 'bg-[#FFF1E6] text-[#E8833A]',
+            'no_show' => 'bg-[#F1F3F6] text-[#7C8595]',
             'cancelled' => 'bg-[#FCEBF0] text-[#D97791]',
         ];
 
@@ -13,13 +15,37 @@
             'called' => 'Called',
             'serving' => 'In Service',
             'completed' => 'Completed',
+            'skipped' => 'Skipped',
+            'no_show' => 'No-show',
             'cancelled' => 'Cancelled',
+        ];
+
+        $priorityStyles = [
+            'priority' => 'bg-[#FFF4E4] text-[#D99A3D]',
+            'emergency' => 'bg-[#FCEBF0] text-[#D97791]',
+        ];
+
+        $priorityLabels = [
+            'normal' => 'Normal',
+            'priority' => 'Priority',
+            'emergency' => 'Emergency',
         ];
 
         $queueTotal = $summary->total ?? 0;
         $waitingTotal = $summary->waiting ?? 0;
         $calledTotal = $summary->called ?? 0;
         $servingTotal = $summary->serving ?? 0;
+
+        // Permissions are resolved once instead of once per table row.
+        $canCreate = auth()->user()->hasPermission('queues.create');
+        $canUpdate = auth()->user()->hasPermission('queues.update');
+
+        $today = \Carbon\Carbon::now(
+            $tenant->timezone ?: config('app.timezone')
+        )->toDateString();
+
+        $inputClass = 'w-full rounded-[12px] border border-[#DCE6EE] bg-[#F8FAFC] px-3.5 py-3 text-sm text-[#263550] outline-none transition focus:border-[#9CC7FF] focus:bg-white focus:ring-4 focus:ring-[#EAF4FF]';
+        $labelClass = 'mb-1.5 block text-[13px] font-semibold text-[#5F6C7F]';
     @endphp
 
     <div class="min-h-screen bg-[#EEF4F8]">
@@ -64,7 +90,7 @@
                         </p>
                     </div>
 
-                    @canDent('queues.create')
+                    @if ($canCreate)
                         <div class="relative z-10 shrink-0">
                             <a href="#add-queue"
                                class="inline-flex items-center justify-center gap-2 rounded-[14px] bg-[#5B9DF9] px-5 py-3 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(91,157,249,0.20)] transition hover:bg-[#4E91F0]">
@@ -76,7 +102,7 @@
                                 Add to Queue
                             </a>
                         </div>
-                    @endcanDent
+                    @endif
                 </div>
             </section>
 
@@ -99,7 +125,7 @@
             @endif
 
             {{-- STATISTICS --}}
-            <section>
+            <section class="space-y-3">
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
 
                     {{-- TOTAL --}}
@@ -177,10 +203,72 @@
                         </div>
                     </div>
                 </div>
+
+                {{-- FINISHED / CLOSED TICKETS --}}
+                <div class="flex flex-wrap items-center gap-2 px-1 text-[11px] font-semibold">
+                    @foreach (['completed', 'skipped', 'no_show', 'cancelled'] as $closedStatus)
+                        <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 {{ $statusStyles[$closedStatus] }}">
+                            <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
+                            {{ $statusLabels[$closedStatus] }}
+                            <span class="text-[#263550]">{{ $summary->{$closedStatus} ?? 0 }}</span>
+                        </span>
+                    @endforeach
+                </div>
             </section>
 
+            {{-- CALL NEXT --}}
+            @if ($canUpdate)
+                <section class="overflow-hidden rounded-[24px] border border-[#D8E4ED] bg-white shadow-[0_6px_24px_rgba(52,75,98,0.035)]">
+                    <form method="POST" action="{{ route('clinic.queues.call-next') }}"
+                          class="flex flex-col gap-4 px-5 py-4 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
+                        @csrf
+                        <input type="hidden" name="date" value="{{ $date }}">
+
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-[#E8F3FF] text-[#5B9DF9]">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 10v4h4l5 4V6l-5 4H3z"/>
+                                    <path stroke-linecap="round" d="M16 9a5 5 0 0 1 0 6m2-9a9 9 0 0 1 0 12"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 class="text-base font-semibold tracking-[-0.025em] text-[#263550]">
+                                    Call Next Patient
+                                </h2>
+                                <p class="mt-0.5 text-xs text-[#8A99AC]">
+                                    Emergency first, then priority, then first come first served.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-3 lg:w-[620px]">
+                            <select name="branch_id" aria-label="Branch"
+                                    class="{{ $inputClass }}">
+                                <option value="">All branches</option>
+                                @foreach ($branches as $branch)
+                                    <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                                @endforeach
+                            </select>
+
+                            <select name="doctor_id" aria-label="Doctor"
+                                    class="{{ $inputClass }}">
+                                <option value="">Any doctor</option>
+                                @foreach ($doctors as $doctor)
+                                    <option value="{{ $doctor->id }}">{{ $doctor->name }}</option>
+                                @endforeach
+                            </select>
+
+                            <button type="submit"
+                                    class="inline-flex items-center justify-center gap-2 rounded-[12px] bg-[#5B9DF9] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#4E91F0]">
+                                Call Next
+                            </button>
+                        </div>
+                    </form>
+                </section>
+            @endif
+
             {{-- ADD QUEUE FORM --}}
-            @canDent('queues.create')
+            @if ($canCreate)
                 <section id="add-queue" class="scroll-mt-5 overflow-hidden rounded-[24px] border border-[#D8E4ED] bg-white shadow-[0_6px_24px_rgba(52,75,98,0.035)]">
                     <div class="flex items-center gap-3 border-b border-[#E9EFF4] px-5 py-4 sm:px-6">
                         <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-[#E8F3FF] text-[#5B9DF9]">
@@ -193,7 +281,7 @@
                                 Register Patient
                             </h2>
                             <p class="mt-0.5 text-xs text-[#8A99AC]">
-                                Add a patient to the queue.
+                                Add a walk-in patient to the queue.
                             </p>
                         </div>
                     </div>
@@ -203,11 +291,10 @@
 
                         <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                             <div>
-                                <label for="patient_id" class="mb-1.5 block text-[13px] font-semibold text-[#5F6C7F]">
+                                <label for="patient_id" class="{{ $labelClass }}">
                                     Patient <span class="text-[#D97791]">*</span>
                                 </label>
-                                <select id="patient_id" name="patient_id" required
-                                        class="w-full rounded-[12px] border border-[#DCE6EE] bg-[#F8FAFC] px-3.5 py-3 text-sm text-[#263550] outline-none transition focus:border-[#9CC7FF] focus:bg-white focus:ring-4 focus:ring-[#EAF4FF]">
+                                <select id="patient_id" name="patient_id" required class="{{ $inputClass }}">
                                     <option value="">Select a patient</option>
                                     @foreach ($patients as $patient)
                                         <option value="{{ $patient->id }}" @selected((string) old('patient_id') === (string) $patient->id)>
@@ -224,12 +311,9 @@
                             </div>
 
                             <div>
-                                <label for="branch_id" class="mb-1.5 block text-[13px] font-semibold text-[#5F6C7F]">
-                                    Branch
-                                </label>
-                                <select id="branch_id" name="branch_id"
-                                        class="w-full rounded-[12px] border border-[#DCE6EE] bg-[#F8FAFC] px-3.5 py-3 text-sm text-[#263550] outline-none transition focus:border-[#9CC7FF] focus:bg-white focus:ring-4 focus:ring-[#EAF4FF]">
-                                    <option value="">Main branch / No branch</option>
+                                <label for="branch_id" class="{{ $labelClass }}">Branch</label>
+                                <select id="branch_id" name="branch_id" class="{{ $inputClass }}">
+                                    <option value="">Main branch</option>
                                     @foreach ($branches as $branch)
                                         <option value="{{ $branch->id }}" @selected((string) old('branch_id') === (string) $branch->id)>
                                             {{ $branch->name }}
@@ -239,12 +323,38 @@
                             </div>
 
                             <div>
-                                <label for="queue_date" class="mb-1.5 block text-[13px] font-semibold text-[#5F6C7F]">
+                                <label for="doctor_id" class="{{ $labelClass }}">Doctor</label>
+                                <select id="doctor_id" name="doctor_id" class="{{ $inputClass }}">
+                                    <option value="">Any available doctor</option>
+                                    @foreach ($doctors as $doctor)
+                                        <option value="{{ $doctor->id }}" @selected((string) old('doctor_id') === (string) $doctor->id)>
+                                            {{ $doctor->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            @if ($canUpdate)
+                                <div>
+                                    <label for="priority" class="{{ $labelClass }}">Priority</label>
+                                    <select id="priority" name="priority" class="{{ $inputClass }}">
+                                        @foreach ($priorities as $priorityValue)
+                                            <option value="{{ $priorityValue }}" @selected(old('priority', 'normal') === $priorityValue)>
+                                                {{ $priorityLabels[$priorityValue] ?? ucfirst($priorityValue) }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            @endif
+
+                            <div>
+                                <label for="queue_date" class="{{ $labelClass }}">
                                     Queue Date <span class="text-[#D97791]">*</span>
                                 </label>
                                 <input id="queue_date" type="date" name="queue_date"
-                                       value="{{ old('queue_date', $date) }}" required
-                                       class="w-full rounded-[12px] border border-[#DCE6EE] bg-[#F8FAFC] px-3.5 py-3 text-sm text-[#263550] outline-none transition focus:border-[#9CC7FF] focus:bg-white focus:ring-4 focus:ring-[#EAF4FF]">
+                                       value="{{ old('queue_date', max($date, $today)) }}"
+                                       min="{{ $today }}" required
+                                       class="{{ $inputClass }}">
                             </div>
 
                             <div class="flex items-end">
@@ -259,18 +369,18 @@
                         </div>
 
                         <p class="mt-3 text-xs text-[#9BA8B7]">
-                            Queue numbers are assigned automatically for each date within the clinic.
+                            Ticket numbers (for example A-001) are assigned automatically per branch and per day.
                         </p>
                     </form>
                 </section>
-            @endcanDent
+            @endif
 
             {{-- QUEUE DIRECTORY --}}
             <section class="overflow-hidden rounded-[26px] border border-[#D8E4ED] bg-white shadow-[0_6px_24px_rgba(52,75,98,0.04)]">
 
                 {{-- DIRECTORY HEADER --}}
-                <div class="flex flex-col gap-4 px-5 py-5 xl:flex-row xl:items-center xl:justify-between sm:px-6">
-                    <div class="flex items-center gap-3">
+                <div class="flex flex-col gap-4 px-5 py-5 2xl:flex-row 2xl:items-center 2xl:justify-between sm:px-6">
+                    <div class="flex shrink-0 items-center gap-3">
                         <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] bg-[#E8F3FF] text-[#5B9DF9]">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
@@ -288,15 +398,15 @@
 
                     {{-- FILTERS --}}
                     <form method="GET" action="{{ route('clinic.queues.index') }}"
-                          class="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-2 xl:w-auto xl:grid-cols-4">
+                          class="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] 2xl:w-[820px] 2xl:shrink-0">
 
-                        <div class="relative sm:col-span-2 xl:col-span-1">
+                        <div class="relative min-w-0 sm:col-span-2 xl:col-span-1">
                             <svg xmlns="http://www.w3.org/2000/svg" class="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#A1AFBF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m1.35-5.15a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0z"/>
                             </svg>
                             <input type="text" name="search" value="{{ $search }}"
-                                   placeholder="Search patient or queue..."
-                                   class="w-full rounded-[12px] border border-[#DCE6EE] bg-[#F8FAFC] py-3 pl-10 pr-3 text-[13px] text-[#263550] outline-none transition placeholder:text-[#A1AFBF] focus:border-[#9CC7FF] focus:bg-white focus:ring-4 focus:ring-[#EAF4FF] xl:w-[220px]">
+                                   placeholder="Search patient or ticket..."
+                                   class="w-full rounded-[12px] border border-[#DCE6EE] bg-[#F8FAFC] py-3 pl-10 pr-3 text-[13px] text-[#263550] outline-none transition placeholder:text-[#A1AFBF] focus:border-[#9CC7FF] focus:bg-white focus:ring-4 focus:ring-[#EAF4FF]">
                         </div>
 
                         <select name="status" aria-label="Filter by queue status"
@@ -330,17 +440,17 @@
 
                 {{-- TABLE --}}
                 <div class="overflow-x-auto border-t border-[#E9EFF4]">
-                    <table class="w-full min-w-[1000px]">
+                    <table class="w-full min-w-[1100px]">
                         <thead>
                             <tr class="bg-[#FAFCFD]">
                                 <th class="px-6 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-[#91A0B2]">
-                                    Queue
+                                    Ticket
                                 </th>
                                 <th class="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-[#91A0B2]">
                                     Patient
                                 </th>
                                 <th class="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-[#91A0B2]">
-                                    Branch
+                                    Branch / Doctor
                                 </th>
                                 <th class="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-[#91A0B2]">
                                     Appointment
@@ -361,38 +471,25 @@
                                         ($queue->patient->first_name ?? '') . ' ' .
                                         ($queue->patient->last_name ?? '')
                                     );
-
-                                    $nextStatus = match ($queue->status) {
-                                        'waiting' => 'called',
-                                        'called' => 'serving',
-                                        'serving' => 'completed',
-                                        default => null,
-                                    };
-
-                                    $nextStatusLabels = [
-                                        'called' => 'Call Patient',
-                                        'serving' => 'Start Service',
-                                        'completed' => 'Complete',
-                                    ];
                                 @endphp
 
                                 <tr class="transition hover:bg-[#FBFDFF]">
 
-                                    {{-- QUEUE NUMBER --}}
+                                    {{-- TICKET --}}
                                     <td class="px-6 py-4">
                                         <div class="flex items-center gap-3">
-                                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[#E8F3FF] text-[#5B9DF9]">
-                                                <span class="text-xs font-bold">
-                                                    {{ str_pad($queue->queue_number, 3, '0', STR_PAD_LEFT) }}
-                                                </span>
+                                            <div class="flex h-10 min-w-[56px] shrink-0 items-center justify-center rounded-[12px] bg-[#E8F3FF] px-2 text-[#5B9DF9]">
+                                                <span class="text-xs font-bold">{{ $queue->ticket_number }}</span>
                                             </div>
                                             <div>
-                                                <p class="text-[13px] font-semibold text-[#263550]">
-                                                    Queue #{{ str_pad($queue->queue_number, 3, '0', STR_PAD_LEFT) }}
-                                                </p>
-                                                <p class="mt-1 text-[11px] text-[#9BA8B7]">
+                                                <p class="text-[11px] text-[#9BA8B7]">
                                                     {{ $queue->queue_date->format('d M Y') }}
                                                 </p>
+                                                @if (isset($priorityStyles[$queue->priority]))
+                                                    <span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold {{ $priorityStyles[$queue->priority] }}">
+                                                        {{ $priorityLabels[$queue->priority] ?? ucfirst($queue->priority) }}
+                                                    </span>
+                                                @endif
                                             </div>
                                         </div>
                                     </td>
@@ -407,11 +504,14 @@
                                         </p>
                                     </td>
 
-                                    {{-- BRANCH --}}
+                                    {{-- BRANCH / DOCTOR --}}
                                     <td class="px-5 py-4">
-                                        <span class="text-[13px] text-[#5F6C7F]">
+                                        <p class="text-[13px] text-[#5F6C7F]">
                                             {{ $queue->branch->name ?? 'Main branch' }}
-                                        </span>
+                                        </p>
+                                        <p class="mt-1 text-[11px] text-[#9BA8B7]">
+                                            {{ $queue->doctor->name ?? 'Any doctor' }}
+                                        </p>
                                     </td>
 
                                     {{-- APPOINTMENT --}}
@@ -438,40 +538,18 @@
 
                                     {{-- ACTIONS --}}
                                     <td class="px-6 py-4">
-                                        <div class="flex items-center justify-end gap-1.5">
-                                            @canDent('queues.update')
-                                                @if ($nextStatus)
-                                                    <form method="POST" action="{{ route('clinic.queues.status', $queue) }}">
-                                                        @csrf
-                                                        @method('PATCH')
-                                                        <input type="hidden" name="status" value="{{ $nextStatus }}">
-
-                                                        <button type="submit"
-                                                                class="inline-flex items-center justify-center whitespace-nowrap rounded-[9px] bg-[#E8F3FF] px-3 py-2 text-[11px] font-semibold text-[#5B9DF9] transition hover:bg-[#DDEEFF]">
-                                                            {{ $nextStatusLabels[$nextStatus] }}
-                                                        </button>
-                                                    </form>
-                                                @endif
-
-                                                @if (in_array($queue->status, ['waiting', 'called'], true))
-                                                    <form method="POST"
-                                                          action="{{ route('clinic.queues.status', $queue) }}"
-                                                          onsubmit="return confirm('Cancel this queue entry?')">
-                                                        @csrf
-                                                        @method('PATCH')
-                                                        <input type="hidden" name="status" value="cancelled">
-
-                                                        <button type="submit"
-                                                                class="inline-flex items-center justify-center rounded-[9px] border border-[#F4D5DC] bg-white px-2.5 py-2 text-[11px] font-semibold text-[#D97791] transition hover:bg-[#FFF6F8]">
-                                                            Cancel
-                                                        </button>
-                                                    </form>
-                                                @endif
-                                            @endcanDent
-
-                                            @if (in_array($queue->status, ['completed', 'cancelled'], true))
-                                                <span class="text-[11px] font-medium text-[#A0ACBA]">No actions</span>
+                                        <div class="flex flex-wrap items-center justify-end gap-1.5">
+                                            @if ($canUpdate)
+                                                @include('clinic.queues._actions', [
+                                                    'queue' => $queue,
+                                                    'queueService' => $queueService,
+                                                ])
                                             @endif
+
+                                            <a href="{{ route('clinic.queues.show', $queue) }}"
+                                               class="inline-flex items-center justify-center whitespace-nowrap rounded-[9px] border border-[#DCE6EE] bg-white px-3 py-2 text-[11px] font-semibold text-[#5F6C7F] transition hover:bg-[#F8FAFC]">
+                                                Details
+                                            </a>
                                         </div>
                                     </td>
                                 </tr>
