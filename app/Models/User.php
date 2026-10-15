@@ -3,12 +3,12 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\TenantContext;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use App\Models\Role;
-use App\Models\Tenant;
+use Illuminate\Support\Facades\DB;
 
 class User extends Authenticatable
 {
@@ -37,6 +37,14 @@ class User extends Authenticatable
     ];
 
     /**
+     * Role and permissions already loaded during this request,
+     * keyed by tenant id. See accessFor().
+     *
+     * @var array<int, array{role: Role|null, permissions: array<string, bool>}>
+     */
+    protected array $accessCache = [];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -55,45 +63,80 @@ class User extends Authenticatable
             ->using(TenantUser::class)
             ->withPivot([
                 'role_id',
-                'role',
                 'is_active',
             ])
             ->withTimestamps();
     }
 
-    public function roleForTenant(?Tenant $tenant = null): ?Role
+    /*
+    |--------------------------------------------------------------------------
+    | Access control
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Load the user's role and permission slugs for one tenant.
+     *
+     * The result is kept on the model instance, so a request that checks
+     * permissions many times (every @canDent, every controller) hits the
+     * database three times in total instead of three times per check.
+     *
+     * @return array{role: Role|null, permissions: array<string, bool>}
+     */
+    protected function accessFor(?Tenant $tenant = null): array
     {
-        $tenant ??= app(\App\Support\TenantContext::class)->get();
+        $tenant ??= app(TenantContext::class)->get();
 
         if (! $tenant) {
-            return null;
+            return ['role' => null, 'permissions' => []];
         }
 
-        $membership = $this->tenants()
-            ->where('tenants.id', $tenant->id)
-            ->wherePivot('is_active', true)
-            ->first();
+        $tenantId = (int) $tenant->id;
 
-        if (! $membership || ! $membership->pivot->role_id) {
-            return null;
+        if (! array_key_exists($tenantId, $this->accessCache)) {
+            $roleId = DB::table('tenant_user')
+                ->where('tenant_id', $tenantId)
+                ->where('user_id', $this->getKey())
+                ->where('is_active', true)
+                ->value('role_id');
+
+            $role = $roleId ? Role::find($roleId) : null;
+
+            $permissions = $role
+                ? array_fill_keys(
+                    $role->permissions()->pluck('permissions.slug')->all(),
+                    true
+                )
+                : [];
+
+            $this->accessCache[$tenantId] = [
+                'role' => $role,
+                'permissions' => $permissions,
+            ];
         }
 
-        return Role::find($membership->pivot->role_id);
+        return $this->accessCache[$tenantId];
+    }
+
+    /**
+     * Forget the cached role and permissions, for example after
+     * changing this user's role in the middle of a request.
+     */
+    public function flushAccessCache(): void
+    {
+        $this->accessCache = [];
+    }
+
+    public function roleForTenant(?Tenant $tenant = null): ?Role
+    {
+        return $this->accessFor($tenant)['role'];
     }
 
     public function hasPermission(
         string $permission,
         ?Tenant $tenant = null
     ): bool {
-        $role = $this->roleForTenant($tenant);
-
-        if (! $role) {
-            return false;
-        }
-
-        return $role->permissions()
-            ->where('permissions.slug', $permission)
-            ->exists();
+        return isset($this->accessFor($tenant)['permissions'][$permission]);
     }
 
     public function hasAnyPermission(

@@ -13,7 +13,6 @@ class TenantUser extends Pivot
         'tenant_id',
         'user_id',
         'role_id',
-        'role',
         'is_active',
     ];
 

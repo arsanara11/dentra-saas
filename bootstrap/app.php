@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Middleware\IdentifyTenant;
 use App\Http\Middleware\SetActiveTenant;
 use App\Http\Middleware\CheckPermission;
 use Illuminate\Foundation\Application;
@@ -15,7 +14,6 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'tenant' => IdentifyTenant::class,
             'active.tenant' => SetActiveTenant::class,
             'permission' => CheckPermission::class,
         ]);

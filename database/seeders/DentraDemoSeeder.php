@@ -94,7 +94,6 @@ class DentraDemoSeeder extends Seeder
         $tenant->users()->syncWithoutDetaching([
             $user->id => [
                 'role_id' => $ownerRole->id,
-                'role' => 'owner',
                 'is_active' => true,
             ],
         ]);

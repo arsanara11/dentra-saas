@@ -35,7 +35,6 @@ class Tenant extends Model
             ->using(TenantUser::class)
             ->withPivot([
                 'role_id',
-                'role',
                 'is_active',
             ])
             ->withTimestamps();
