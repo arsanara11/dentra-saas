@@ -383,7 +383,7 @@
                                 </th>
 
                                 <th class="px-6 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-[#91A0B2]">
-                                    Branch
+                                    Branch / Doctor
                                 </th>
 
                                 <th class="px-6 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-[#91A0B2]">
@@ -466,6 +466,10 @@
                                         <span class="text-sm text-[#5F6C7F]">
                                             {{ $appointment->branch->name ?? 'Main branch' }}
                                         </span>
+
+                                        <p class="mt-1 text-xs text-[#9BA8B7]">
+                                            {{ $appointment->doctor->name ?? 'No doctor assigned' }}
+                                        </p>
                                     </td>
 
                                     {{-- STATUS --}}

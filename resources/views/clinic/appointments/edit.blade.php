@@ -160,6 +160,34 @@
                             @enderror
                         </div>
 
+                        {{-- Doctor --}}
+                        <div>
+                            <label for="doctor_id" class="mb-2 block text-sm font-semibold text-[#263550]">
+                                Doctor
+                            </label>
+
+                            <select
+                                id="doctor_id"
+                                name="doctor_id"
+                                class="w-full rounded-xl border border-[#DCE7F0] bg-white px-4 py-3 text-sm text-[#263550] outline-none transition focus:border-[#5B9DF9] focus:ring-4 focus:ring-blue-100"
+                            >
+                                <option value="">No specific doctor</option>
+
+                                @foreach ($doctors as $doctor)
+                                    <option
+                                        value="{{ $doctor->id }}"
+                                        @selected((string) old('doctor_id', $appointment->doctor_id) === (string) $doctor->id)
+                                    >
+                                        {{ $doctor->name }}@if ($doctor->specialization) — {{ $doctor->specialization }}@endif
+                                    </option>
+                                @endforeach
+                            </select>
+
+                            @error('doctor_id')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
                         {{-- Appointment Status --}}
                         <div>
                             <label for="status" class="mb-2 block text-sm font-semibold text-[#263550]">

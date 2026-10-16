@@ -197,6 +197,18 @@
                             </p>
                         </div>
 
+                            <div>
+                                <p class="text-xs font-medium uppercase tracking-wider text-[#9BA8B7]">Doctor</p>
+                                <p class="mt-2 text-sm font-semibold text-[#526176]">
+                                    {{ $appointment->doctor->name ?? 'No doctor assigned' }}
+                                </p>
+                                @if ($appointment->doctor?->specialization)
+                                    <p class="mt-1 text-xs text-[#9BA8B7]">
+                                        {{ $appointment->doctor->specialization }}
+                                    </p>
+                                @endif
+                            </div>
+
                         <div>
                             <p class="text-xs font-medium uppercase tracking-wider text-[#9BA8B7]">Created By</p>
                             <p class="mt-2 text-sm font-semibold text-[#526176]">
