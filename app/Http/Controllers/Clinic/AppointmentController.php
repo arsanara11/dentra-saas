@@ -6,6 +6,7 @@ use App\Exceptions\QueueException;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Branch;
+use App\Models\Doctor;
 use App\Models\Patient;
 use App\Models\Queue;
 use App\Services\Queue\QueueService;
@@ -43,7 +44,7 @@ class AppointmentController extends Controller
 
         $query = Appointment::query()
             ->where('tenant_id', $tenant->id)
-            ->with(['patient', 'branch']);
+            ->with(['patient', 'branch', 'doctor']);
 
         $this->applyFilters($query, $search, $status, $date);
 
@@ -104,10 +105,13 @@ class AppointmentController extends Controller
             ->orderBy('name')
             ->get();
 
+        $doctors = $this->activeDoctors((int) $tenant->id);
+
         return view('clinic.appointments.create', compact(
             'tenant',
             'patients',
-            'branches'
+            'branches',
+            'doctors'
         ));
     }
 
@@ -128,16 +132,28 @@ class AppointmentController extends Controller
             (int) $tenant->id
         );
 
-        $this->ensureNoPatientScheduleConflict(
-            $validated,
-            (int) $tenant->id
-        );
-
         $appointment = DB::transaction(function () use (
             $validated,
             $tenant,
             $request
         ) {
+            // Locks the doctor row, so two receptionists booking the same
+            // doctor at the same moment cannot both pass the checks below.
+            $validated = $this->resolveDoctorAndBranch(
+                $validated,
+                (int) $tenant->id
+            );
+
+            $this->ensureNoPatientScheduleConflict(
+                $validated,
+                (int) $tenant->id
+            );
+
+            $this->ensureNoDoctorScheduleConflict(
+                $validated,
+                (int) $tenant->id
+            );
+
             $validated['tenant_id'] = $tenant->id;
             $validated['appointment_number'] =
                 $this->generateAppointmentNumber((int) $tenant->id);
@@ -171,7 +187,7 @@ class AppointmentController extends Controller
             (int) $tenant->id
         );
 
-        $appointment->load(['patient', 'branch', 'creator', 'queue']);
+        $appointment->load(['patient', 'branch', 'doctor', 'creator', 'queue']);
 
         return view('clinic.appointments.show', compact(
             'tenant',
@@ -209,11 +225,14 @@ class AppointmentController extends Controller
             ->orderBy('name')
             ->get();
 
+        $doctors = $this->activeDoctors((int) $tenant->id);
+
         return view('clinic.appointments.edit', compact(
             'tenant',
             'appointment',
             'patients',
-            'branches'
+            'branches',
+            'doctors'
         ));
     }
 
@@ -250,13 +269,26 @@ class AppointmentController extends Controller
             ],
         ])['status'];
 
-        $this->ensureNoPatientScheduleConflict(
-            $validated,
-            (int) $tenant->id,
-            (int) $appointment->id
-        );
+        DB::transaction(function () use ($validated, $tenant, $appointment) {
+            $validated = $this->resolveDoctorAndBranch(
+                $validated,
+                (int) $tenant->id
+            );
 
-        $appointment->update($validated);
+            $this->ensureNoPatientScheduleConflict(
+                $validated,
+                (int) $tenant->id,
+                (int) $appointment->id
+            );
+
+            $this->ensureNoDoctorScheduleConflict(
+                $validated,
+                (int) $tenant->id,
+                (int) $appointment->id
+            );
+
+            $appointment->update($validated);
+        });
 
         return redirect()
             ->route('clinic.appointments.show', $appointment)
@@ -405,6 +437,15 @@ class AppointmentController extends Controller
                     ->where('tenant_id', $tenantId),
             ],
 
+            'doctor_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('doctors', 'id')
+                    ->where('tenant_id', $tenantId)
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at'),
+            ],
+
             'appointment_date' => [
                 'required',
                 'date',
@@ -471,6 +512,126 @@ class AppointmentController extends Controller
         if ($conflict) {
             throw ValidationException::withMessages([
                 'start_time' => 'This patient already has an appointment that overlaps with the selected time.',
+            ]);
+        }
+    }
+
+    /**
+     * Active doctors of the tenant for the form dropdown.
+     */
+    private function activeDoctors(int $tenantId)
+    {
+        return Doctor::query()
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'branch_id', 'name', 'specialization']);
+    }
+
+    /**
+     * Lock the chosen doctor and keep the branch consistent with them.
+     *
+     * - A doctor assigned to a branch fills in an empty branch field.
+     * - A doctor assigned to a different branch is rejected.
+     *
+     * Must run inside a transaction.
+     */
+    private function resolveDoctorAndBranch(array $data, int $tenantId): array
+    {
+        if (empty($data['doctor_id'])) {
+            $data['doctor_id'] = null;
+
+            return $data;
+        }
+
+        $doctor = Doctor::query()
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'active')
+            ->whereKey($data['doctor_id'])
+            ->lockForUpdate()
+            ->first();
+
+        if (! $doctor) {
+            throw ValidationException::withMessages([
+                'doctor_id' => 'The selected doctor is not available.',
+            ]);
+        }
+
+        if ($doctor->branch_id) {
+            if (empty($data['branch_id'])) {
+                $data['branch_id'] = $doctor->branch_id;
+            } elseif ((int) $data['branch_id'] !== (int) $doctor->branch_id) {
+                throw ValidationException::withMessages([
+                    'doctor_id' => 'This doctor works at a different branch.',
+                ]);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Prevent double-booking a doctor.
+     *
+     * Two appointments overlap when their time ranges intersect. When an
+     * appointment has no end time it only blocks its exact start time.
+     * Cancelled and no-show appointments are ignored.
+     */
+    private function ensureNoDoctorScheduleConflict(
+        array $data,
+        int $tenantId,
+        ?int $ignoreAppointmentId = null
+    ): void {
+        if (empty($data['doctor_id'])) {
+            return;
+        }
+
+        $start = $data['start_time'];
+        $end = $data['end_time'] ?? null;
+
+        $conflict = Appointment::query()
+            ->where('tenant_id', $tenantId)
+            ->where('doctor_id', $data['doctor_id'])
+            ->whereDate('appointment_date', $data['appointment_date'])
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->when(
+                $ignoreAppointmentId !== null,
+                fn (Builder $query) => $query->where(
+                    'id',
+                    '!=',
+                    $ignoreAppointmentId
+                )
+            )
+            ->where(function (Builder $query) use ($start, $end) {
+                if ($end) {
+                    $query
+                        ->where(function (Builder $query) use ($start, $end) {
+                            $query->whereNotNull('end_time')
+                                ->where('start_time', '<', $end)
+                                ->where('end_time', '>', $start);
+                        })
+                        ->orWhere(function (Builder $query) use ($start, $end) {
+                            $query->whereNull('end_time')
+                                ->where('start_time', '>=', $start)
+                                ->where('start_time', '<', $end);
+                        });
+
+                    return;
+                }
+
+                $query
+                    ->where('start_time', $start)
+                    ->orWhere(function (Builder $query) use ($start) {
+                        $query->whereNotNull('end_time')
+                            ->where('start_time', '<=', $start)
+                            ->where('end_time', '>', $start);
+                    });
+            })
+            ->exists();
+
+        if ($conflict) {
+            throw ValidationException::withMessages([
+                'doctor_id' => 'This doctor already has an appointment that overlaps with the selected time.',
             ]);
         }
     }

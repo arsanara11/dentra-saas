@@ -44,6 +44,7 @@ class Appointment extends Model
     protected $fillable = [
         'tenant_id',
         'branch_id',
+        'doctor_id',
         'patient_id',
         'appointment_number',
         'appointment_date',
@@ -70,6 +71,11 @@ class Appointment extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function doctor(): BelongsTo
+    {
+        return $this->belongsTo(Doctor::class);
     }
 
     public function patient(): BelongsTo

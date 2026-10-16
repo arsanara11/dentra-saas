@@ -188,7 +188,7 @@ class QueueService
             'patient_id' => $appointment->patient_id,
             'appointment_id' => $appointment->id,
             'branch_id' => $appointment->branch_id,
-            'doctor_id' => $options['doctor_id'] ?? null,
+            'doctor_id' => $options['doctor_id'] ?? $appointment->doctor_id,
             'priority' => $options['priority'] ?? Queue::PRIORITY_NORMAL,
             'queue_date' => $today,
         ]);
@@ -348,22 +348,37 @@ class QueueService
             $data['branch_id'] ?? $appointment?->branch_id
         );
 
-        // Doctor (optional)
+        // Doctor (optional). An explicit choice wins; otherwise the doctor
+        // booked on the appointment is used.
         $doctor = null;
+        $doctorId = $data['doctor_id'] ?? null;
+        $doctorFromAppointment = false;
 
-        if (! empty($data['doctor_id'])) {
+        if (empty($doctorId) && $appointment?->doctor_id) {
+            $doctorId = $appointment->doctor_id;
+            $doctorFromAppointment = true;
+        }
+
+        if (! empty($doctorId)) {
             $doctor = Doctor::query()
                 ->where('tenant_id', $tenant->id)
                 ->where('status', 'active')
-                ->whereKey($data['doctor_id'])
+                ->whereKey($doctorId)
                 ->first();
 
-            if (! $doctor) {
+            // A doctor chosen by staff must be valid. A doctor that was only
+            // inherited from the appointment (and has since left, been
+            // deactivated or moved) must never block the patient's check-in.
+            if (! $doctor && ! $doctorFromAppointment) {
                 throw new QueueException('The selected doctor was not found or is inactive.');
             }
 
-            if ($doctor->branch_id && (int) $doctor->branch_id !== (int) $branch->id) {
-                throw new QueueException('The selected doctor is not assigned to this branch.');
+            if ($doctor && $doctor->branch_id && (int) $doctor->branch_id !== (int) $branch->id) {
+                if (! $doctorFromAppointment) {
+                    throw new QueueException('The selected doctor is not assigned to this branch.');
+                }
+
+                $doctor = null;
             }
         }
 
