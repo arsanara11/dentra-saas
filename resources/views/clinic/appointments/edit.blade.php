@@ -178,7 +178,7 @@
                                         value="{{ $doctor->id }}"
                                         @selected((string) old('doctor_id', $appointment->doctor_id) === (string) $doctor->id)
                                     >
-                                        {{ $doctor->name }}@if ($doctor->specialization) — {{ $doctor->specialization }}@endif
+                                        {{ $doctor->name }}@if ($doctor->specialization) — {{ $doctor->specialization }}@endif@if ($doctor->status !== 'active') (inactive)@endif
                                     </option>
                                 @endforeach
                             </select>
@@ -278,6 +278,38 @@
                             @enderror
                         </div>
 
+                        {{-- Service --}}
+                        <div>
+                            <label for="service_id" class="mb-2 block text-sm font-semibold text-[#263550]">
+                                Service
+                            </label>
+
+                            <select
+                                id="service_id"
+                                name="service_id"
+                                class="w-full rounded-xl border border-[#DCE7F0] bg-white px-4 py-3 text-sm text-[#263550] outline-none transition focus:border-[#5B9DF9] focus:ring-4 focus:ring-blue-100"
+                            >
+                                <option value="">No specific service</option>
+
+                                @foreach ($services as $service)
+                                            <option
+                                                value="{{ $service->id }}"
+                                                data-duration="{{ $service->duration_minutes }}"
+                                                @selected((string) old('service_id', $appointment->service_id) === (string) $service->id)>
+                                                {{ $service->name }} · {{ $service->duration_minutes }} min@if ($service->status !== 'active') (inactive)@endif
+                                            </option>
+                                        @endforeach
+                            </select>
+
+                            @error('service_id')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+
+                            <p class="mt-2 text-xs text-[#9BA8B7]">
+                                Changing the service refills the end time from its default duration.
+                            </p>
+                        </div>
+
                         {{-- Reason --}}
                         <div class="sm:col-span-2">
                             <label for="reason" class="mb-2 block text-sm font-semibold text-[#263550]">
@@ -340,4 +372,33 @@
 
         </div>
     </div>
+
+    <script>
+        // Fill the end time from the selected service's default duration.
+        (function () {
+            var service = document.getElementById('service_id');
+            var start = document.getElementById('start_time');
+            var end = document.getElementById('end_time');
+
+            if (!service || !start || !end) { return; }
+
+            function update() {
+                var option = service.options[service.selectedIndex];
+                var minutes = parseInt((option && option.dataset.duration) || '0', 10);
+
+                if (!minutes || !start.value) { return; }
+
+                var parts = start.value.split(':');
+                var total = (parseInt(parts[0], 10) * 60) + parseInt(parts[1], 10) + minutes;
+
+                if (total >= 24 * 60) { return; }
+
+                end.value = String(Math.floor(total / 60)).padStart(2, '0')
+                    + ':' + String(total % 60).padStart(2, '0');
+            }
+
+            service.addEventListener('change', update);
+            start.addEventListener('change', update);
+        })();
+    </script>
 </x-app-layout>

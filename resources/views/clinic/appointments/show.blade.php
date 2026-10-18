@@ -209,6 +209,20 @@
                                 @endif
                             </div>
 
+                            <div>
+                                <p class="text-xs font-medium uppercase tracking-wider text-[#9BA8B7]">Service</p>
+                                <p class="mt-2 text-sm font-semibold text-[#526176]">
+                                    {{ $appointment->service->name ?? 'No service selected' }}
+                                </p>
+                                @if ($appointment->service)
+                                    <p class="mt-1 text-xs text-[#9BA8B7]">
+                                        {{ $appointment->service->duration_minutes }} min
+                                        · {{ $tenant->currency ?: 'IDR' }}
+                                        {{ number_format((float) $appointment->service->price, in_array($tenant->currency ?: 'IDR', ['IDR', 'JPY', 'KRW', 'VND'], true) ? 0 : 2, ',', '.') }}
+                                    </p>
+                                @endif
+                            </div>
+
                         <div>
                             <p class="text-xs font-medium uppercase tracking-wider text-[#9BA8B7]">Created By</p>
                             <p class="mt-2 text-sm font-semibold text-[#526176]">

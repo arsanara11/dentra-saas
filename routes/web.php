@@ -6,6 +6,7 @@ use App\Http\Controllers\Clinic\DentalRecordController;
 use App\Http\Controllers\Clinic\DoctorController;
 use App\Http\Controllers\Clinic\PatientController;
 use App\Http\Controllers\Clinic\QueueController;
+use App\Http\Controllers\Clinic\ServiceController;
 use App\Http\Controllers\ProfileController;
 use App\Services\Queue\QueueService;
 use Illuminate\Support\Facades\Route;
@@ -61,6 +62,15 @@ Route::middleware(['auth', 'verified', 'active.tenant'])
 
                 // Doctors
                 Route::resource('doctors', DoctorController::class);
+
+                // Services
+                Route::patch('services/{service}/toggle', [ServiceController::class, 'toggle'])
+                    ->whereNumber('service')
+                    ->middleware('throttle:60,1')
+                    ->name('services.toggle');
+
+                Route::resource('services', ServiceController::class)
+                    ->except(['show']);
 
                 // Dental Records
                 Route::resource('dental-records', DentalRecordController::class);

@@ -356,9 +356,13 @@
                 {{-- APPOINTMENTS --}}
 
 
+                @canDent('appointments.view')
                 <a
-                    href="#"
-                    class="group relative flex h-12 w-12 items-center justify-center rounded-[17px] text-[#8993A5] transition-all duration-200 hover:bg-[#F2F7FD] hover:text-[#5B9DF9]"
+                    href="{{ route('clinic.appointments.index') }}"
+                    class="group relative flex h-12 w-12 items-center justify-center rounded-[17px] transition-all duration-200
+                    {{ request()->routeIs('clinic.appointments.*')
+                        ? 'bg-[#EAF4FF] text-[#5B9DF9]'
+                        : 'text-[#8993A5] hover:bg-[#F2F7FD] hover:text-[#5B9DF9]' }}"
                 >
 
 
@@ -405,6 +409,7 @@
 
 
                 </a>
+                @endcanDent
 
 
 
@@ -412,9 +417,13 @@
                 {{-- QUEUE --}}
 
 
+                @canDent('queues.view')
                 <a
-                    href="#"
-                    class="group relative flex h-12 w-12 items-center justify-center rounded-[17px] text-[#8993A5] transition-all duration-200 hover:bg-[#F2F7FD] hover:text-[#5B9DF9]"
+                    href="{{ route('clinic.queues.index') }}"
+                    class="group relative flex h-12 w-12 items-center justify-center rounded-[17px] transition-all duration-200
+                    {{ request()->routeIs('clinic.queues.*')
+                        ? 'bg-[#EAF4FF] text-[#5B9DF9]'
+                        : 'text-[#8993A5] hover:bg-[#F2F7FD] hover:text-[#5B9DF9]' }}"
                 >
 
 
@@ -467,6 +476,7 @@
 
 
                 </a>
+                @endcanDent
 
 
 
@@ -474,9 +484,13 @@
                 {{-- DOCTORS --}}
 
 
+                @canDent('doctors.view')
                 <a
-                    href="#"
-                    class="group relative flex h-12 w-12 items-center justify-center rounded-[17px] text-[#8993A5] transition-all duration-200 hover:bg-[#F2F7FD] hover:text-[#5B9DF9]"
+                    href="{{ route('clinic.doctors.index') }}"
+                    class="group relative flex h-12 w-12 items-center justify-center rounded-[17px] transition-all duration-200
+                    {{ request()->routeIs('clinic.doctors.*')
+                        ? 'bg-[#EAF4FF] text-[#5B9DF9]'
+                        : 'text-[#8993A5] hover:bg-[#F2F7FD] hover:text-[#5B9DF9]' }}"
                 >
 
 
@@ -515,16 +529,51 @@
 
 
                 </a>
+                @endcanDent
 
 
 
+
+                {{-- SERVICES --}}
+                @canDent('services.view')
+                <a
+                    href="{{ route('clinic.services.index') }}"
+                    class="group relative flex h-12 w-12 items-center justify-center rounded-[17px] transition-all duration-200
+                    {{ request()->routeIs('clinic.services.*')
+                        ? 'bg-[#EAF4FF] text-[#5B9DF9]'
+                        : 'text-[#8993A5] hover:bg-[#F2F7FD] hover:text-[#5B9DF9]' }}"
+                >
+                    <svg
+                        class="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M9 5h6M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1ZM7 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1M9 14l2 2 4-4"
+                        />
+                    </svg>
+                    <span
+                        class="pointer-events-none absolute left-[62px] z-50 whitespace-nowrap rounded-xl bg-[#273047] px-3 py-2 text-xs font-medium text-white opacity-0 shadow-soft transition group-hover:opacity-100"
+                    >
+                        Services
+                    </span>
+                </a>
+                @endcanDent
 
                 {{-- DENTAL RECORDS --}}
 
 
+                @canDent('dental_records.view')
                 <a
-                    href="#"
-                    class="group relative flex h-12 w-12 items-center justify-center rounded-[17px] text-[#8993A5] transition-all duration-200 hover:bg-[#F2F7FD] hover:text-[#5B9DF9]"
+                    href="{{ route('clinic.dental-records.index') }}"
+                    class="group relative flex h-12 w-12 items-center justify-center rounded-[17px] transition-all duration-200
+                    {{ request()->routeIs('clinic.dental-records.*')
+                        ? 'bg-[#EAF4FF] text-[#5B9DF9]'
+                        : 'text-[#8993A5] hover:bg-[#F2F7FD] hover:text-[#5B9DF9]' }}"
                 >
 
 
@@ -563,6 +612,7 @@
 
 
                 </a>
+                @endcanDent
 
 
             </nav>

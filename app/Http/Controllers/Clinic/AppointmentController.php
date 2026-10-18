@@ -9,6 +9,7 @@ use App\Models\Branch;
 use App\Models\Doctor;
 use App\Models\Patient;
 use App\Models\Queue;
+use App\Models\Service;
 use App\Services\Queue\QueueService;
 use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
@@ -44,7 +45,7 @@ class AppointmentController extends Controller
 
         $query = Appointment::query()
             ->where('tenant_id', $tenant->id)
-            ->with(['patient', 'branch', 'doctor']);
+            ->with(['patient', 'branch', 'doctor', 'service']);
 
         $this->applyFilters($query, $search, $status, $date);
 
@@ -106,12 +107,14 @@ class AppointmentController extends Controller
             ->get();
 
         $doctors = $this->activeDoctors((int) $tenant->id);
+        $services = $this->activeServices((int) $tenant->id);
 
         return view('clinic.appointments.create', compact(
             'tenant',
             'patients',
             'branches',
-            'doctors'
+            'doctors',
+            'services'
         ));
     }
 
@@ -137,6 +140,13 @@ class AppointmentController extends Controller
             $tenant,
             $request
         ) {
+            // The service may fill in the end time, so it is applied before
+            // any schedule conflict is checked.
+            $validated = $this->applyService(
+                $validated,
+                (int) $tenant->id
+            );
+
             // Locks the doctor row, so two receptionists booking the same
             // doctor at the same moment cannot both pass the checks below.
             $validated = $this->resolveDoctorAndBranch(
@@ -187,7 +197,7 @@ class AppointmentController extends Controller
             (int) $tenant->id
         );
 
-        $appointment->load(['patient', 'branch', 'doctor', 'creator', 'queue']);
+        $appointment->load(['patient', 'branch', 'doctor', 'service', 'creator', 'queue']);
 
         return view('clinic.appointments.show', compact(
             'tenant',
@@ -225,14 +235,24 @@ class AppointmentController extends Controller
             ->orderBy('name')
             ->get();
 
-        $doctors = $this->activeDoctors((int) $tenant->id);
+        // The current doctor and service stay selectable even if they were
+        // deactivated later, so saving the form never clears them silently.
+        $doctors = $this->activeDoctors(
+            (int) $tenant->id,
+            $appointment->doctor_id ? (int) $appointment->doctor_id : null
+        );
+        $services = $this->activeServices(
+            (int) $tenant->id,
+            $appointment->service_id ? (int) $appointment->service_id : null
+        );
 
         return view('clinic.appointments.edit', compact(
             'tenant',
             'appointment',
             'patients',
             'branches',
-            'doctors'
+            'doctors',
+            'services'
         ));
     }
 
@@ -259,7 +279,9 @@ class AppointmentController extends Controller
 
         $validated = $this->validateAppointment(
             $request,
-            (int) $tenant->id
+            (int) $tenant->id,
+            $appointment->doctor_id ? (int) $appointment->doctor_id : null,
+            $appointment->service_id ? (int) $appointment->service_id : null
         );
 
         $validated['status'] = $request->validate([
@@ -270,9 +292,16 @@ class AppointmentController extends Controller
         ])['status'];
 
         DB::transaction(function () use ($validated, $tenant, $appointment) {
+            $validated = $this->applyService(
+                $validated,
+                (int) $tenant->id,
+                $appointment->service_id ? (int) $appointment->service_id : null
+            );
+
             $validated = $this->resolveDoctorAndBranch(
                 $validated,
-                (int) $tenant->id
+                (int) $tenant->id,
+                $appointment->doctor_id ? (int) $appointment->doctor_id : null
             );
 
             $this->ensureNoPatientScheduleConflict(
@@ -419,7 +448,9 @@ class AppointmentController extends Controller
      */
     private function validateAppointment(
         Request $request,
-        int $tenantId
+        int $tenantId,
+        ?int $keepDoctorId = null,
+        ?int $keepServiceId = null
     ): array {
         return $request->validate([
             'patient_id' => [
@@ -437,13 +468,35 @@ class AppointmentController extends Controller
                     ->where('tenant_id', $tenantId),
             ],
 
+            // The value already saved on the appointment is always accepted,
+            // even if that service or doctor has been deactivated since.
+            'service_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('services', 'id')->where(
+                    function ($query) use ($tenantId, $keepServiceId) {
+                        $query->where('tenant_id', $tenantId)
+                            ->where(function ($query) use ($keepServiceId) {
+                                $query->where('status', Service::STATUS_ACTIVE)
+                                    ->orWhere('id', $keepServiceId ?? 0);
+                            });
+                    }
+                ),
+            ],
+
             'doctor_id' => [
                 'nullable',
                 'integer',
-                Rule::exists('doctors', 'id')
-                    ->where('tenant_id', $tenantId)
-                    ->where('status', 'active')
-                    ->whereNull('deleted_at'),
+                Rule::exists('doctors', 'id')->where(
+                    function ($query) use ($tenantId, $keepDoctorId) {
+                        $query->where('tenant_id', $tenantId)
+                            ->whereNull('deleted_at')
+                            ->where(function ($query) use ($keepDoctorId) {
+                                $query->where('status', 'active')
+                                    ->orWhere('id', $keepDoctorId ?? 0);
+                            });
+                    }
+                ),
             ],
 
             'appointment_date' => [
@@ -519,13 +572,95 @@ class AppointmentController extends Controller
     /**
      * Active doctors of the tenant for the form dropdown.
      */
-    private function activeDoctors(int $tenantId)
+    private function activeDoctors(int $tenantId, ?int $keepId = null)
     {
         return Doctor::query()
             ->where('tenant_id', $tenantId)
-            ->where('status', 'active')
+            ->where(function (Builder $query) use ($keepId) {
+                $query->where('status', 'active')
+                    ->when(
+                        $keepId !== null,
+                        fn (Builder $query) => $query->orWhere('id', $keepId)
+                    );
+            })
             ->orderBy('name')
-            ->get(['id', 'branch_id', 'name', 'specialization']);
+            ->get(['id', 'branch_id', 'name', 'specialization', 'status']);
+    }
+
+    /**
+     * Active services of the tenant for the form dropdown.
+     */
+    private function activeServices(int $tenantId, ?int $keepId = null)
+    {
+        return Service::query()
+            ->where('tenant_id', $tenantId)
+            ->where(function (Builder $query) use ($keepId) {
+                $query->where('status', Service::STATUS_ACTIVE)
+                    ->when(
+                        $keepId !== null,
+                        fn (Builder $query) => $query->orWhere('id', $keepId)
+                    );
+            })
+            ->orderBy('category')
+            ->orderBy('name')
+            ->get(['id', 'name', 'category', 'duration_minutes', 'price', 'status']);
+    }
+
+    /**
+     * Apply the chosen service to the appointment data.
+     *
+     * - The end time is filled from the service duration when left empty.
+     * - The reason for visit defaults to the service name.
+     */
+    private function applyService(
+        array $data,
+        int $tenantId,
+        ?int $keepServiceId = null
+    ): array {
+        if (empty($data['service_id'])) {
+            $data['service_id'] = null;
+
+            return $data;
+        }
+
+        $service = Service::query()
+            ->where('tenant_id', $tenantId)
+            ->where(function (Builder $query) use ($keepServiceId) {
+                $query->where('status', Service::STATUS_ACTIVE)
+                    ->orWhere('id', $keepServiceId ?? 0);
+            })
+            ->whereKey($data['service_id'])
+            ->first();
+
+        if (! $service) {
+            throw ValidationException::withMessages([
+                'service_id' => 'The selected service is not available.',
+            ]);
+        }
+
+        if (empty($data['end_time'])) {
+            [$hour, $minute] = array_map('intval', explode(':', $data['start_time']));
+
+            $endMinutes = ($hour * 60) + $minute + $service->duration_minutes;
+
+            if ($endMinutes >= 24 * 60) {
+                throw ValidationException::withMessages([
+                    'end_time' => 'This service would end after midnight. Choose an earlier start time.',
+                ]);
+            }
+
+            $data['end_time'] = sprintf(
+                '%02d:%02d',
+                intdiv($endMinutes, 60),
+                $endMinutes % 60
+            );
+        }
+
+        if (empty($data['reason'])) {
+            $data['reason'] = $service->name;
+        }
+
+        return $data;
     }
 
     /**
@@ -536,8 +671,11 @@ class AppointmentController extends Controller
      *
      * Must run inside a transaction.
      */
-    private function resolveDoctorAndBranch(array $data, int $tenantId): array
-    {
+    private function resolveDoctorAndBranch(
+        array $data,
+        int $tenantId,
+        ?int $keepDoctorId = null
+    ): array {
         if (empty($data['doctor_id'])) {
             $data['doctor_id'] = null;
 
@@ -546,7 +684,10 @@ class AppointmentController extends Controller
 
         $doctor = Doctor::query()
             ->where('tenant_id', $tenantId)
-            ->where('status', 'active')
+            ->where(function (Builder $query) use ($keepDoctorId) {
+                $query->where('status', 'active')
+                    ->orWhere('id', $keepDoctorId ?? 0);
+            })
             ->whereKey($data['doctor_id'])
             ->lockForUpdate()
             ->first();

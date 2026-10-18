@@ -76,6 +76,12 @@ class DentraRbacSeeder extends Seeder
                 'group' => 'appointments',
                 'description' => 'Cancel appointments.',
             ],
+            [
+                'name' => 'Delete Appointments',
+                'slug' => 'appointments.delete',
+                'group' => 'appointments',
+                'description' => 'Delete appointments.',
+            ],
 
             // Queue
             [
@@ -109,6 +115,20 @@ class DentraRbacSeeder extends Seeder
                 'slug' => 'doctors.manage',
                 'group' => 'doctors',
                 'description' => 'Create and manage doctors.',
+            ],
+
+            // Services
+            [
+                'name' => 'View Services',
+                'slug' => 'services.view',
+                'group' => 'services',
+                'description' => 'View the clinic service catalogue.',
+            ],
+            [
+                'name' => 'Manage Services',
+                'slug' => 'services.manage',
+                'group' => 'services',
+                'description' => 'Create, update and deactivate services.',
             ],
 
             // Dental Records
@@ -392,6 +412,7 @@ class DentraRbacSeeder extends Seeder
                 'appointments.create',
                 'appointments.update',
                 'appointments.cancel',
+                'appointments.delete',
 
                 'queues.view',
                 'queues.create',
@@ -399,6 +420,9 @@ class DentraRbacSeeder extends Seeder
 
                 'doctors.view',
                 'doctors.manage',
+
+                'services.view',
+                'services.manage',
 
                 'dental_records.view',
                 'dental_records.create',
@@ -445,12 +469,16 @@ class DentraRbacSeeder extends Seeder
                 'appointments.create',
                 'appointments.update',
                 'appointments.cancel',
+                'appointments.delete',
 
                 'queues.view',
                 'queues.create',
                 'queues.update',
 
                 'doctors.view',
+
+                'services.view',
+                'services.manage',
 
                 'dental_records.view',
 
@@ -498,6 +526,8 @@ class DentraRbacSeeder extends Seeder
 
                 'doctors.view',
 
+                'services.view',
+
                 'billing.view',
                 'payments.process',
             ],
@@ -514,6 +544,8 @@ class DentraRbacSeeder extends Seeder
                 'queues.update',
 
                 'doctors.view',
+
+                'services.view',
 
                 'dental_records.view',
                 'dental_records.create',
@@ -537,6 +569,8 @@ class DentraRbacSeeder extends Seeder
 
                 'doctors.view',
 
+                'services.view',
+
                 'dental_records.view',
 
                 'treatments.view',
@@ -550,6 +584,8 @@ class DentraRbacSeeder extends Seeder
                 'patients.view',
 
                 'appointments.view',
+
+                'services.view',
 
                 'billing.view',
                 'billing.manage',
