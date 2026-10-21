@@ -1,21 +1,12 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
-
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
-
     <meta name="csrf-token" content="{{ csrf_token() }}">
-
-
     <title>DENTRA</title>
-
-
     <script src="https://cdn.tailwindcss.com"></script>
-
-
     <script>
         tailwind.config = {
             theme: {
@@ -28,8 +19,6 @@
                             'sans-serif'
                         ],
                     },
-
-
                     colors: {
                         dentra: {
                             blue: '#5B9DF9',
@@ -40,8 +29,6 @@
                             pale: '#EAF4FF',
                         }
                     },
-
-
                     boxShadow: {
                         soft: '0 8px 28px rgba(74, 104, 140, 0.07)',
                         card: '0 8px 24px rgba(64, 88, 120, 0.05)',
@@ -51,77 +38,59 @@
         }
     </script>
 
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
 
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
         rel="stylesheet"
     >
-
-
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
-
     @stack('styles')
-
 
     <style>
         html,
         body {
             min-height: 100%;
         }
-
-
+        
         body {
             margin: 0;
             font-family: 'Inter', sans-serif;
             background: #F4F7FB;
         }
 
-
         /* =========================================================
            DENTRA SCROLLBAR
         ========================================================= */
-
-
         .dentra-scroll::-webkit-scrollbar {
             width: 7px;
         }
-
-
+        
         .dentra-scroll::-webkit-scrollbar-track {
             background: transparent;
         }
-
-
+        
         .dentra-scroll::-webkit-scrollbar-thumb {
             background: #DCE3EC;
             border-radius: 999px;
         }
 
-
         .dentra-scroll::-webkit-scrollbar-thumb:hover {
             background: #C8D2DF;
         }
 
-
         /* =========================================================
            SIDEBAR SCROLLBAR
         ========================================================= */
-
-
         .dentra-sidebar::-webkit-scrollbar {
             width: 4px;
         }
 
-
         .dentra-sidebar::-webkit-scrollbar-track {
             background: transparent;
         }
-
 
         .dentra-sidebar::-webkit-scrollbar-thumb {
             background: #E3E8EF;
@@ -130,52 +99,30 @@
     </style>
 </head>
 
-
-
-
 <body class="min-h-screen bg-[#F4F7FB] font-sans text-[#273047] antialiased">
-
-
-
 
     {{-- =========================================================
          FULL SCREEN APPLICATION
     ========================================================== --}}
 
-
     <div class="flex min-h-screen w-full">
-
-
-
 
         {{-- =========================================================
              SIDEBAR
         ========================================================== --}}
-
-
         <aside
             class="dentra-sidebar hidden w-[108px] shrink-0 flex-col items-center border-r border-[#EEF1F5] bg-white py-7 lg:flex"
         >
-
-
-
-
             {{-- =====================================================
                  LOGO
             ====================================================== --}}
-
-
             <a
                 href="{{ route('dashboard') }}"
                 class="mb-11 flex flex-col items-center"
             >
-
-
                 <div
                     class="flex h-11 w-11 items-center justify-center rounded-[15px] bg-[#EAF4FF] text-[#5B9DF9]"
                 >
-
-
                     {{-- Tooth Icon --}}
 
 
@@ -820,55 +767,31 @@
                         stroke-width="1.8"
                         viewBox="0 0 24 24"
                     >
-
-
                         <circle
                             cx="11"
                             cy="11"
                             r="7"
                         />
-
-
                         <path
                             stroke-linecap="round"
                             d="m20 20-4-4"
                         />
-
-
                     </svg>
-
-
-
 
                     <input
                         type="text"
                         placeholder="Find Patients or Appointments"
                         class="h-12 w-full rounded-[18px] border border-[#EEF1F5] bg-[#F9FAFC] px-12 text-sm text-[#273047] outline-none placeholder:text-[#A3ACBA] transition focus:border-[#CFE3F9] focus:bg-white focus:ring-4 focus:ring-[#EAF4FF]"
                     >
-
-
                 </div>
 
-
-
-
                 {{-- RIGHT SIDE --}}
-
-
                 <div class="ml-auto flex items-center gap-3">
-
-
-
-
                     {{-- NOTIFICATION --}}
-
-
                     <button
                         type="button"
                         class="relative flex h-11 w-11 items-center justify-center rounded-full border border-[#EEF1F5] bg-white text-[#68748A] transition hover:bg-[#F8FAFC]"
                     >
-
-
                         <svg
                             class="h-5 w-5"
                             fill="none"
@@ -876,73 +799,40 @@
                             stroke-width="1.8"
                             viewBox="0 0 24 24"
                         >
-
-
                             <path
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
                                 d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"
                             />
-
-
                             <path
                                 stroke-linecap="round"
                                 d="M10 21h4"
                             />
-
-
                         </svg>
-
-
-
 
                         <span
                             class="absolute right-2.5 top-2 h-2 w-2 rounded-full bg-[#F27D8A]"
                         ></span>
-
-
                     </button>
 
-
-
-
                     {{-- USER AVATAR --}}
-
-
                     <div
                         class="flex h-11 w-11 items-center justify-center rounded-full border-4 border-white bg-[#DCEEFF] text-sm font-bold text-[#4387E8] shadow-sm"
                     >
                         {{ strtoupper(substr(auth()->user()->name ?? 'D', 0, 1)) }}
                     </div>
-
-
                 </div>
-
-
             </header>
-
-
-
 
             {{-- =====================================================
                  CONTENT
             ====================================================== --}}
-
-
             <div
                 class="dentra-scroll min-h-0 flex-1 overflow-y-auto {{ request()->routeIs('clinic.patients.*') ? 'px-0 pb-6 pt-0 sm:px-0 sm:pb-8 sm:pt-0 lg:px-0' : 'px-3 pb-6 pt-4 sm:px-5 sm:pb-8 sm:pt-5 lg:px-6' }}"
             >
-
-
                 {{ $slot }}
-
-
             </div>
-
-
         </main>
-
-
     </div>
 
 
